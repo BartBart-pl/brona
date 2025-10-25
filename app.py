@@ -123,8 +123,9 @@ with col_date1:
     date_from = st.date_input(
         "Data od",
         value=st.session_state.date_from,
+        min_value=datetime(1980, 1, 1),
         max_value=datetime.now(),
-        help="Data pierwszej rejestracji od",
+        help="Data pierwszej rejestracji od (możliwe od 1980)",
         key="date_from_input"
     )
 
@@ -132,6 +133,7 @@ with col_date2:
     date_to = st.date_input(
         "Data do",
         value=st.session_state.date_to,
+        min_value=datetime(1980, 1, 1),
         max_value=datetime.now(),
         help="Data pierwszej rejestracji do",
         key="date_to_input"
@@ -936,10 +938,14 @@ if st.session_state.vehicles_data:
             # Eksport
             st.markdown("### 💾 Eksport danych")
             csv = df_filtered.to_csv(index=False).encode('utf-8')
+            
+            # Nazwa pliku - użyj nazwy województwa (zamień spacje i polskie znaki)
+            voiv_name = params['voiv'].replace(' ', '_').replace('Ł', 'L').replace('ł', 'l').replace('ą', 'a').replace('ć', 'c').replace('ę', 'e').replace('ń', 'n').replace('ó', 'o').replace('ś', 's').replace('ź', 'z').replace('ż', 'z').replace('Ą', 'A').replace('Ć', 'C').replace('Ę', 'E').replace('Ń', 'N').replace('Ó', 'O').replace('Ś', 'S').replace('Ź', 'Z').replace('Ż', 'Z')
+            
             st.download_button(
                 label="📥 Pobierz wyniki jako CSV",
                 data=csv,
-                file_name=f"cepik_{params['voiv'].split()[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                file_name=f"brona_{voiv_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv"
             )
 
