@@ -57,7 +57,16 @@ with st.spinner("Ładowanie województw..."):
 
 # 1. WOJEWÓDZTWO (wymagane)
 st.sidebar.markdown("### 📍 Województwo *")
-voiv_options = ["WSZYSTKIE"] + [f"{kod} - {nazwa}" for kod, nazwa in voivodeships]
+
+# Posortuj województwa alfabetycznie według nazwy
+voivodeships_sorted = sorted(voivodeships, key=lambda x: x[1])
+
+# Stwórz mapowanie nazwa -> kod dla łatwego odczytu
+voiv_name_to_code = {nazwa: kod for kod, nazwa in voivodeships_sorted}
+
+# Lista opcji - tylko nazwy, alfabetycznie
+voiv_options = ["WSZYSTKIE"] + [nazwa for kod, nazwa in voivodeships_sorted]
+
 selected_voiv = st.sidebar.selectbox(
     "Wybierz województwo",
     options=voiv_options,
@@ -70,7 +79,7 @@ if selected_voiv == "WSZYSTKIE":
     voiv_code = "ALL"
     voiv_codes_list = [kod for kod, nazwa in voivodeships]
 else:
-    voiv_code = selected_voiv.split(" - ")[0] if selected_voiv else None
+    voiv_code = voiv_name_to_code.get(selected_voiv)
     voiv_codes_list = None
 
 # 2. ZAKRES DAT (wymagany)

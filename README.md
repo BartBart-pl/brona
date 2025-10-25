@@ -2,6 +2,60 @@
 
 Aplikacja webowa do wyszukiwania i analizy danych o pojazdach zarejestrowanych w Polsce z wykorzystaniem API CEPiK (Centralna Ewidencja Pojazdów i Kierowców).
 
+## 🆕 NOWOŚĆ: Wersja Client-Side (v3.0)
+
+**⚡ Aplikacja została całkowicie przepisana!**
+
+Teraz dostępne są **dwie wersje**:
+1. **v3.0 Client-Side** (ZALECANA) - Statyczna strona HTML/JavaScript
+   - ✅ Wszystkie zapytania wykonywane **bezpośrednio z przeglądarki użytkownika**
+   - ✅ **Zero obciążenia serwera** - serwer tylko serwuje statyczne pliki
+   - ✅ **Nieograniczona skalowalność** - możesz obsłużyć tysiące użytkowników jednocześnie
+   - ✅ **Darmowy hosting** - GitHub Pages, Netlify, Vercel, prosty HTTP server
+   - 📖 Dokumentacja: [CLIENT_SIDE_README.md](CLIENT_SIDE_README.md)
+   - 🚀 Quick start: [QUICKSTART_CLIENT.md](QUICKSTART_CLIENT.md)
+
+2. **v2.3 Server-Side** (STARSZA) - Aplikacja Streamlit
+   - ⚠️ Wszystkie zapytania przez serwer (wysokie obciążenie)
+   - ⚠️ Wymaga Pythona i zależności
+   - ⚠️ Ograniczona skalowalność
+   - 📖 Dokumentacja poniżej
+
+---
+
+## 🎯 Jak wybrać wersję?
+
+| Sytuacja | Zalecana wersja |
+|----------|-----------------|
+| Chcę hostować dla wielu użytkowników | **v3.0 Client-Side** |
+| Chcę najtańszy hosting | **v3.0 Client-Side** |
+| Chcę prosty deployment | **v3.0 Client-Side** |
+| Chcę użyć do testów lokalnych | Obie wersje działają |
+| Potrzebuję backendu z logowaniem | v2.3 Server-Side |
+
+---
+
+# 🚀 Quick Start - v3.0 Client-Side (ZALECANA)
+
+```bash
+# 1. Uruchom proxy server (rozwiązuje problem CORS)
+python proxy_server.py
+
+# 2. Otwórz przeglądarkę
+open http://localhost:8000
+```
+
+**To wszystko!** Aplikacja działa w przeglądarce.
+
+### ⚠️ Problem CORS
+API CEPiK nie zwraca nagłówków CORS, więc bezpośrednie zapytania z przeglądarki są blokowane.  
+**Rozwiązanie:** Używamy prostego proxy serwera (`proxy_server.py`).  
+📖 Szczegóły: [CORS_FIX.md](CORS_FIX.md)
+
+---
+
+# 📚 Dokumentacja v2.3 Server-Side (STARSZA WERSJA)
+
 ## 🌟 Funkcje
 
 ### 🔍 Wyszukiwanie
@@ -113,7 +167,7 @@ Dane pochodzą z publicznego API CEPiK (Ministerstwo Cyfryzacji).
 
 ## 👨‍💻 Autor
 
-© 2025 | Wersja 2.3
+© 2025 | Wersja 3.0 (Client-Side) + v2.3 (Server-Side)
 
 ## 🐛 Zgłaszanie błędów
 
@@ -121,7 +175,18 @@ W przypadku znalezienia błędów, proszę o utworzenie issue w repozytorium Git
 
 ## 🔄 Historia wersji
 
-### v2.3 (2025-01-25)
+### v3.0 (2025-10-25) - CLIENT-SIDE REVOLUTION 🎉
+- **CAŁKOWITE PRZEPISANIE** aplikacji na statyczną stronę HTML/JavaScript
+- Wszystkie zapytania do API wykonywane bezpośrednio z przeglądarki użytkownika
+- Zero obciążenia serwera - serwer tylko serwuje statyczne pliki
+- Nieograniczona skalowalność - możesz hostować na CDN, GitHub Pages, Netlify, Vercel
+- Prosty deployment - wystarczy Python HTTP server lub dowolny hosting statyczny
+- Wszystkie funkcje z v2.3 zachowane
+- Nowe: Responsywny design, Bootstrap 5, ulepszone UI
+- Pliki: `index.html`, `app.js`, `styles.css`, `serve.py`
+- Dokumentacja: `CLIENT_SIDE_README.md`, `QUICKSTART_CLIENT.md`
+
+### v2.3 (2025-01-25) - Server-Side
 - Zmiana nazwy aplikacji na BRONA
 - Filtry numeryczne na integerach
 - Poprawione filtrowanie pojemności skokowej

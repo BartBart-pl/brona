@@ -1,0 +1,70 @@
+========================================
+   NAPRAW BŁĘDY - WYKONAJ TE KROKI
+========================================
+
+✅ Problemy zostały naprawione w kodzie!
+
+TERAZ ZRÓB TO:
+
+1. Otwórz terminal
+2. Przejdź do folderu projektu:
+   cd /Users/bartlomiej.bartczak/Work/cepik
+
+3. Aktywuj środowisko:
+   source env/bin/activate
+
+4. Uruchom skrypt debugowania:
+   python debug_api.py
+
+   To pokaże:
+   - Czy SSL działa poprawnie ✅
+   - Jaką strukturę mają dane z API
+   - Co dokładnie zwraca API
+
+5. Uruchom aplikację:
+   streamlit run app.py
+
+========================================
+
+CO ZOSTAŁO NAPRAWIONE:
+
+✅ Problem SSL (DH_KEY_TOO_SMALL)
+   - Dodano DESAdapter z SECLEVEL=1
+   - Obsługa starszych certyfikatów SSL
+
+✅ Problem parsowania danych
+   - Inteligentne wykrywanie struktury
+   - Próbuje różnych kluczy ('wojewodztwo', 'nazwa', itp.)
+   - Fallback do statycznych list
+
+✅ Lepsze timeouty
+   - 10s dla słowników
+   - 30s dla wyszukiwania
+
+✅ Lepsza obsługa błędów
+   - Komunikaty zrozumiałe dla użytkownika
+   - Graceful degradation
+
+========================================
+
+JEŚLI NADAL NIE DZIAŁA:
+
+Pełna reinstalacja (3 komendy):
+
+rm -rf env/
+./setup.sh
+./run.sh
+
+========================================
+
+PLIKI POMOCNICZE:
+
+- debug_api.py - debugowanie połączenia
+- test_api.py - test wszystkich funkcji
+- TROUBLESHOOTING.md - pełny przewodnik
+- SSL_FIX.md - szczegóły naprawy SSL
+
+========================================
+
+Powodzenia! 🚀
+
