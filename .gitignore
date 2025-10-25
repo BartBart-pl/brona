@@ -38,7 +38,7 @@ ENV/
 .DS_Store
 
 # Streamlit
-.streamlit/
+.streamlit/secrets.toml
 
 # Jupyter Notebook
 .ipynb_checkpoints
