@@ -79,8 +79,14 @@ if selected_voiv == "WSZYSTKIE":
     voiv_code = "ALL"
     voiv_codes_list = [kod for kod, nazwa in voivodeships]
 else:
+    # Mapuj nazwę województwa na kod
     voiv_code = voiv_name_to_code.get(selected_voiv)
     voiv_codes_list = None
+    
+    # Debug - sprawdź czy mapowanie zadziałało
+    if voiv_code is None:
+        st.error(f"❌ Błąd: Nie można znaleźć kodu dla województwa '{selected_voiv}'")
+        st.write("Dostępne mapowanie:", voiv_name_to_code)
 
 # 2. ZAKRES DAT (wymagany)
 st.sidebar.markdown("### 📅 Zakres dat pierwszej rejestracji *")
@@ -147,23 +153,27 @@ with st.sidebar.expander("🔧 Wszystkie filtry", expanded=True):
     # Marka - z API (dropdown jeśli dostępne)
     marki = dictionaries.get('marka', [])
     if marki and len(marki) > 0:
-        brand_options = ["Wpisz markę...", "-- Wszystkie --"] + sorted(marki)
+        brand_options = ["-- Wszystkie marki --"] + sorted(marki)
         brand_search = st.selectbox(
             "Marka pojazdu",
             options=brand_options,
             index=0,
-            key="brand_filter"
+            key="brand_filter",
+            help="Wybierz konkretną markę lub zostaw 'Wszystkie marki' aby przeszukać wszystkie"
         )
-        if brand_search in ["Wpisz markę...", "-- Wszystkie --"]:
+        # Jeśli wybrano "-- Wszystkie marki --", ustaw None (= wszystkie)
+        if brand_search == "-- Wszystkie marki --":
             brand_search = None
     else:
         brand_search = st.text_input(
             "Marka pojazdu",
             value="",
-            placeholder="np. BMW, TOYOTA, AUDI",
-            key="brand_filter"
+            placeholder="np. BMW, TOYOTA, AUDI (zostaw puste dla wszystkich)",
+            key="brand_filter",
+            help="Zostaw puste aby przeszukać wszystkie marki"
         )
-        brand_search = brand_search if brand_search else None
+        # Puste pole = wszystkie marki
+        brand_search = brand_search.strip() if brand_search else None
     
     # Model - text input (za dużo wartości dla dropdown)
     model_search = st.text_input(
@@ -235,10 +245,6 @@ with st.sidebar.expander("🔧 Wszystkie filtry", expanded=True):
         # Jeśli wybrano wartość, dodaj do filtrów API
         if selected_value != "-- Wszystkie --":
             api_filters[dict_id] = selected_value
-
-# Backward compatibility - już nie używane ale zostawmy dla bezpieczeństwa
-api_brand = None
-api_model = None
 
 # Opcja dodawania do istniejących danych
 st.sidebar.markdown("---")
@@ -335,12 +341,13 @@ if search_button:
             # Przygotuj dodatkowe filtry (bez marka/model, bo są osobne parametry)
             add_filters = {k: v for k, v in api_filters.items() if k not in ['marka', 'model']}
             
+            # Użyj brand_search i model_search (None = wszystkie)
             # Użyj równoległego pobierania
             all_vehicles, errors, statuses = api.search_all_voivodeships_parallel(
                 date_from=date_from_str,
                 date_to=date_to_str,
-                brand=api_brand or brand_search if (api_brand or brand_search) else None,
-                model=api_model or model_search if (api_model or model_search) else None,
+                brand=brand_search,  # None = wszystkie marki
+                model=model_search,  # None = wszystkie modele
                 year_from=year_from,
                 year_to=year_to,
                 progress_callback=progress_callback,
@@ -439,7 +446,7 @@ if search_button:
         
         else:
             # Pojedyncze województwo z progress bar
-            search_msg = f"Wyszukiwanie w {selected_voiv.split(' - ')[1]}"
+            search_msg = f"Wyszukiwanie w województwie: {selected_voiv}"
             if brand_search:
                 search_msg += f" | Marka: {brand_search}"
             if model_search:
@@ -455,10 +462,6 @@ if search_button:
                     status_text.text(f"Pobrano: {fetched}/{total} pojazdów (strona {page})")
                     progress_bar.progress(progress)
             
-            # Użyj API filters jeśli są włączone, w przeciwnym razie użyj brand_search/model_search
-            final_brand = api_brand if api_brand else (brand_search if brand_search else None)
-            final_model = api_model if api_model else (model_search if model_search else None)
-            
             # Przygotuj dodatkowe filtry (bez marka/model, bo są osobne parametry)
             add_filters = {k: v for k, v in api_filters.items() if k not in ['marka', 'model']}
             
@@ -466,8 +469,8 @@ if search_button:
                 voivodeship_code=voiv_code,
                 date_from=date_from_str,
                 date_to=date_to_str,
-                brand=final_brand,
-                model=final_model,
+                brand=brand_search,  # None = wszystkie marki
+                model=model_search,  # None = wszystkie modele
                 year_from=year_from,
                 year_to=year_to,
                 retry=True,
