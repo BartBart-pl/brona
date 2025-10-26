@@ -333,7 +333,7 @@ if search_button:
         
         # Jeśli wybrano WSZYSTKIE województwa
         if voiv_code == "ALL":
-            st.info(f"⏳ Odpytywanie {len(voiv_codes_list)} województw równolegle (max 3 jednocześnie, 1.5s odstęp między zapytaniami)...")
+            st.info(f"⏳ Odpytywanie {len(voiv_codes_list)} województw równolegle (max 2 jednocześnie, 2.5s odstęp między zapytaniami)...")
             
             # Twórz placeholder dla tabeli statusów
             status_placeholder = st.empty()
@@ -369,7 +369,7 @@ if search_button:
                     
                     # Komunikat o rate limiting
                     if rate_limited:
-                        st.warning("⚠️ **PRZEKROCZONO LIMIT ZAPYTAŃ** - Wstrzymano wszystkie zapytania na 30 sekund...")
+                        st.warning("⚠️ **PRZEKROCZONO LIMIT ZAPYTAŃ** - Wstrzymano wszystkie zapytania na 15 sekund...")
                     
                     # Tabela statusów
                     df_status = pd.DataFrame(status_data)

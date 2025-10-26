@@ -471,7 +471,7 @@ class CepikAPI:
         # Throttling - minimalny odstęp między zapytaniami
         last_request_time = {'time': 0}
         request_lock = threading.Lock()
-        MIN_REQUEST_INTERVAL = 1.5  # sekund między zapytaniami
+        MIN_REQUEST_INTERVAL = 2.5  # sekund między zapytaniami (zwiększone dla stabilności)
         
         def check_rate_limit(response):
             """Sprawdź czy API zwróciło błąd rate limiting"""
@@ -555,15 +555,15 @@ class CepikAPI:
                         with rate_limit_lock:
                             if rate_limit_event.is_set():  # Tylko pierwszy wątek blokuje
                                 rate_limit_event.clear()
-                                statuses[code]['status'] = '⚠️ Rate limit - czekam 30s...'
+                                statuses[code]['status'] = '⚠️ Rate limit - czekam 15s...'
                                 
                                 # Zaktualizuj wszystkie statusy
                                 for c in statuses:
                                     if statuses[c]['status'] not in ['✅ Ukończono', '❌ Błąd']:
                                         statuses[c]['status'] = '⏸️ Wstrzymano (rate limit)'
                         
-                        # Odczekaj 30 sekund
-                        time.sleep(30)
+                        # Odczekaj 15 sekund (zmniejszone z 30s)
+                        time.sleep(15)
                         
                         with rate_limit_lock:
                             rate_limit_event.set()
@@ -657,48 +657,37 @@ class CepikAPI:
         if progress_callback:
             progress_callback(statuses.copy())
         
-        # Wykonaj równolegle (max 3 jednocześnie - ograniczenie dla API)
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        # Wykonaj równolegle (max 2 jednocześnie - zmniejszone dla stabilności API)
+        with ThreadPoolExecutor(max_workers=2) as executor:
             futures = {executor.submit(fetch_voivodeship, code): code for code in voiv_codes}
             
-            # Użyj as_completed() z timeoutem dla częstszych aktualizacji UI
+            # Użyj as_completed() BEZ timeout dla lepszej wydajności
             completed_count = 0
             total_count = len(futures)
-            pending = set(futures.keys())
+            last_ui_update = time.time()
+            UI_UPDATE_INTERVAL = 2.0  # aktualizuj UI co 2s (jeśli nic się nie zakończyło)
             
-            while pending:
-                # Czekaj max 0.5s na zakończenie któregoś zadania
-                done_now = set()
-                try:
-                    for future in as_completed(pending, timeout=0.5):
-                        done_now.add(future)
-                        
-                        code, vehicles, error = future.result()
-                        
-                        if error:
-                            errors.append(f"{self.WOJEWODZTWA_KODY.get(code, code)}: {error}")
-                        
-                        if vehicles:
-                            # Deduplicacja między województwami
-                            for vehicle in vehicles:
-                                vehicle_id = vehicle.get('id')
-                                if vehicle_id and vehicle_id not in seen_ids:
-                                    seen_ids.add(vehicle_id)
-                                    all_vehicles.append(vehicle)
-                        
-                        completed_count += 1
-                except TimeoutError:
-                    # Timeout - żadne zadanie nie zakończyło się w 0.5s
-                    # To jest OK - po prostu aktualizujemy UI i czekamy dalej
-                    pass
+            for future in as_completed(futures):
+                code, vehicles, error = future.result()
                 
-                # Usuń zakończone zadania z pending
-                pending -= done_now
+                if error:
+                    errors.append(f"{self.WOJEWODZTWA_KODY.get(code, code)}: {error}")
                 
-                # Aktualizuj UI po każdej iteracji (co ~0.5s lub po zakończeniu zadania)
+                if vehicles:
+                    # Deduplicacja między województwami
+                    for vehicle in vehicles:
+                        vehicle_id = vehicle.get('id')
+                        if vehicle_id and vehicle_id not in seen_ids:
+                            seen_ids.add(vehicle_id)
+                            all_vehicles.append(vehicle)
+                
+                completed_count += 1
+                
+                # Aktualizuj UI po każdym zakończonym województwie
                 # (wywołane z głównego wątku, nie z osobnego wątku)
                 if progress_callback:
                     with rate_limit_lock:
                         progress_callback(statuses.copy())
+                    last_ui_update = time.time()
         
         return all_vehicles, errors, statuses
