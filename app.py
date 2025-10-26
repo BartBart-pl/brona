@@ -36,6 +36,21 @@ def get_cached_dictionaries():
     """Pobiera wszystkie słowniki z cache (24h)"""
     return api.get_all_dictionaries()
 
+# Ukryj elementy deweloperskie Streamlit
+hide_streamlit_style = """
+<style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display: none;}
+    div[data-testid="stToolbar"] {display: none;}
+    div[data-testid="stDecoration"] {display: none;}
+    div[data-testid="stStatusWidget"] {display: none;}
+    #stStatusWidget {display: none;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 # Tytuł aplikacji
 st.title("🚗 BRONA - Bieżące Raporty O Nabytych Autach")
 st.markdown("Wyszukiwarka i analiza danych o pojazdach zarejestrowanych w Polsce (baza CEPiK)")
