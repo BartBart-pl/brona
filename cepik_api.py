@@ -11,7 +11,7 @@ import pandas as pd
 import ssl
 import asyncio
 import aiohttp
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import threading
 from datetime import datetime
@@ -635,22 +635,41 @@ class CepikAPI:
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(fetch_voivodeship, code): code for code in voiv_codes}
             
-            # Czekaj na zakończenie każdego zadania i aktualizuj UI
-            for future in futures:
-                code, vehicles, error = future.result()
+            # Użyj as_completed() z timeoutem dla częstszych aktualizacji UI
+            completed_count = 0
+            total_count = len(futures)
+            pending = set(futures.keys())
+            
+            while pending:
+                # Czekaj max 0.5s na zakończenie któregoś zadania
+                done_now = set()
+                try:
+                    for future in as_completed(pending, timeout=0.5):
+                        done_now.add(future)
+                        
+                        code, vehicles, error = future.result()
+                        
+                        if error:
+                            errors.append(f"{self.WOJEWODZTWA_KODY.get(code, code)}: {error}")
+                        
+                        if vehicles:
+                            # Deduplicacja między województwami
+                            for vehicle in vehicles:
+                                vehicle_id = vehicle.get('id')
+                                if vehicle_id and vehicle_id not in seen_ids:
+                                    seen_ids.add(vehicle_id)
+                                    all_vehicles.append(vehicle)
+                        
+                        completed_count += 1
+                except TimeoutError:
+                    # Timeout - żadne zadanie nie zakończyło się w 0.5s
+                    # To jest OK - po prostu aktualizujemy UI i czekamy dalej
+                    pass
                 
-                if error:
-                    errors.append(f"{self.WOJEWODZTWA_KODY.get(code, code)}: {error}")
+                # Usuń zakończone zadania z pending
+                pending -= done_now
                 
-                if vehicles:
-                    # Deduplicacja między województwami
-                    for vehicle in vehicles:
-                        vehicle_id = vehicle.get('id')
-                        if vehicle_id and vehicle_id not in seen_ids:
-                            seen_ids.add(vehicle_id)
-                            all_vehicles.append(vehicle)
-                
-                # Aktualizuj UI po każdym zakończonym województwie
+                # Aktualizuj UI po każdej iteracji (co ~0.5s lub po zakończeniu zadania)
                 # (wywołane z głównego wątku, nie z osobnego wątku)
                 if progress_callback:
                     with rate_limit_lock:
