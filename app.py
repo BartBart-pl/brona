@@ -8,6 +8,16 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 from cepik_api import CepikAPI
+import sys
+import logging
+
+# Włącz tryb debugowania
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+print("[DEBUG] Streamlit app started in DEBUG mode")
 
 
 # Konfiguracja strony

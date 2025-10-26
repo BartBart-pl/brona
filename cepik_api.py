@@ -470,14 +470,28 @@ class CepikAPI:
         
         def check_rate_limit(response):
             """Sprawdź czy API zwróciło błąd rate limiting"""
-            if response.status_code in [429, 503]:
-                return True
-            # Możliwe inne wskaźniki rate limiting
-            if 'X-RateLimit-Remaining' in response.headers:
-                remaining = int(response.headers.get('X-RateLimit-Remaining', 1))
-                if remaining <= 0:
+            try:
+                status = response.status_code
+                print(f"[DEBUG] Response status code: {status}")
+                print(f"[DEBUG] Response headers: {dict(response.headers)}")
+                
+                if status in [429, 503]:
+                    print(f"[DEBUG] Rate limit detected: status {status}")
                     return True
-            return False
+                    
+                # Możliwe inne wskaźniki rate limiting
+                if 'X-RateLimit-Remaining' in response.headers:
+                    remaining = int(response.headers.get('X-RateLimit-Remaining', 1))
+                    print(f"[DEBUG] X-RateLimit-Remaining: {remaining}")
+                    if remaining <= 0:
+                        print(f"[DEBUG] Rate limit detected: remaining={remaining}")
+                        return True
+                        
+                print(f"[DEBUG] No rate limit detected")
+                return False
+            except Exception as e:
+                print(f"[DEBUG] Error in check_rate_limit: {e}")
+                return False
         
         def fetch_voivodeship(code):
             voiv_name = self.WOJEWODZTWA_KODY.get(code, code)
@@ -520,9 +534,12 @@ class CepikAPI:
                     params['page'] = current_page
                     
                     # Czekaj jeśli jest rate limit
+                    print(f"[DEBUG] {voiv_name}: Waiting for rate_limit_event...")
                     rate_limit_event.wait()
+                    print(f"[DEBUG] {voiv_name}: Rate limit cleared, making request to page {current_page}")
                     
                     response = self.session.get(url, params=params, timeout=30)
+                    print(f"[DEBUG] {voiv_name}: Got response for page {current_page}")
                     
                     # Sprawdź rate limiting
                     if check_rate_limit(response):
