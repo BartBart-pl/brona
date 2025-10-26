@@ -43,6 +43,8 @@ with st.expander("ℹ️ Jak działa aplikacja?"):
     - 🔍 Po rodzaju paliwa (w tabeli)
     
     **Wskazówki:**
+    - 🚗 **Marka pojazdu:** Domyślnie widoczne "Wpisz markę..." oznacza wyszukiwanie wszystkich marek. 
+      Wybierz konkretną markę z listy aby zawęzić wyniki.
     - ⚡ Użyj filtrów marki/modelu przed wyszukiwaniem - API zwróci tylko pasujące pojazdy (szybciej!)
     - 📊 Bez filtrów pobierzesz wszystkie pojazdy z okresu (może być ich dużo)
     - ⏱️ Pobieranie dużej ilości pojazdów może potrwać do 60 sekund
@@ -158,16 +160,16 @@ with st.sidebar.expander("🔧 Wszystkie filtry", expanded=True):
     # Marka - z API (dropdown jeśli dostępne)
     marki = dictionaries.get('marka', [])
     if marki and len(marki) > 0:
-        brand_options = ["-- Wszystkie marki --"] + sorted(marki)
+        brand_options = ["Wpisz markę..."] + sorted(marki)
         brand_search = st.selectbox(
             "Marka pojazdu",
             options=brand_options,
             index=0,
             key="brand_filter",
-            help="Wybierz konkretną markę lub zostaw 'Wszystkie marki' aby przeszukać wszystkie"
+            help="Zostaw 'Wpisz markę...' aby wyszukać wszystkie marki, lub wybierz konkretną markę"
         )
-        # Jeśli wybrano "-- Wszystkie marki --", ustaw None (= wszystkie)
-        if brand_search == "-- Wszystkie marki --":
+        # Jeśli nie zmieniono domyślnej opcji, wyszukaj wszystkie marki (None = wszystkie)
+        if brand_search == "Wpisz markę...":
             brand_search = None
     else:
         brand_search = st.text_input(
