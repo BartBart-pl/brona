@@ -34,7 +34,7 @@ with st.expander("ℹ️ Jak działa aplikacja?"):
     st.markdown("""
     **API CEPiK pozwala wyszukiwać pojazdy według:**
     - ✅ Województwa (wymagane)
-    - ✅ Zakresu dat pierwszej rejestracji (wymagane)
+    - ✅ Okresu danych z CEPiK - maksymalnie 1 rok (wymagane)
     - ✅ Marki pojazdu (opcjonalne - filtrowanie przez API)
     - ✅ Modelu pojazdu (opcjonalne - filtrowanie przez API)
     
@@ -46,6 +46,8 @@ with st.expander("ℹ️ Jak działa aplikacja?"):
     - ⚡ Użyj filtrów marki/modelu przed wyszukiwaniem - API zwróci tylko pasujące pojazdy (szybciej!)
     - 📊 Bez filtrów pobierzesz wszystkie pojazdy z okresu (może być ich dużo)
     - ⏱️ Pobieranie dużej ilości pojazdów może potrwać do 60 sekund
+    - 📅 **Dłuższe okresy:** Maksymalny okres to 1 rok. Dla dłuższych okresów wykonaj kilka zapytań 
+      i zaznacz opcję "➕ Dodaj do istniejących danych" aby połączyć wyniki.
     """)
 
 # Sidebar z filtrami
@@ -89,7 +91,8 @@ else:
         st.write("Dostępne mapowanie:", voiv_name_to_code)
 
 # 2. ZAKRES DAT (wymagany)
-st.sidebar.markdown("### 📅 Zakres dat pierwszej rejestracji *")
+st.sidebar.markdown("### 📅 Okres danych z CEPiK *")
+st.sidebar.caption("⏱️ Maksymalny okres w pojedynczym zapytaniu: 1 rok")
 
 # Inicjalizacja domyślnych dat w session state
 if 'date_from' not in st.session_state:
