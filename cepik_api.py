@@ -657,8 +657,8 @@ class CepikAPI:
         if progress_callback:
             progress_callback(statuses.copy())
         
-        # Wykonaj równolegle (max 2 jednocześnie - zmniejszone dla stabilności API)
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        # Wykonaj równolegle
+        with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(fetch_voivodeship, code): code for code in voiv_codes}
             
             # Użyj as_completed() BEZ timeout dla lepszej wydajności

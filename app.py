@@ -333,7 +333,7 @@ if search_button:
         
         # Jeśli wybrano WSZYSTKIE województwa
         if voiv_code == "ALL":
-            st.info(f"⏳ Odpytywanie {len(voiv_codes_list)} województw równolegle (max 2 jednocześnie, 2.5s odstęp między zapytaniami)...")
+            st.info(f"⏳ Odpytywanie {len(voiv_codes_list)} województw...")
             
             # Twórz placeholder dla tabeli statusów
             status_placeholder = st.empty()
