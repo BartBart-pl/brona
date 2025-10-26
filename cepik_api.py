@@ -471,7 +471,7 @@ class CepikAPI:
         # Throttling - minimalny odstęp między zapytaniami
         last_request_time = {'time': 0}
         request_lock = threading.Lock()
-        MIN_REQUEST_INTERVAL = 2.5  # sekund między zapytaniami (zwiększone dla stabilności)
+        MIN_REQUEST_INTERVAL = 0.5  # sekund między zapytaniami
         
         def check_rate_limit(response):
             """Sprawdź czy API zwróciło błąd rate limiting"""
