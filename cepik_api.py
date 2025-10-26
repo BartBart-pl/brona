@@ -468,12 +468,15 @@ class CepikAPI:
         rate_limit_lock = threading.Lock()
         statuses = {}  # Szczegółowe statusy dla każdego województwa
         
+        # Throttling - minimalny odstęp między zapytaniami
+        last_request_time = {'time': 0}
+        request_lock = threading.Lock()
+        MIN_REQUEST_INTERVAL = 1.5  # sekund między zapytaniami
+        
         def check_rate_limit(response):
             """Sprawdź czy API zwróciło błąd rate limiting"""
             try:
                 status = response.status_code
-                print(f"[DEBUG] Response status code: {status}")
-                print(f"[DEBUG] Response headers: {dict(response.headers)}")
                 
                 if status in [429, 503]:
                     print(f"[DEBUG] Rate limit detected: status {status}")
@@ -482,12 +485,12 @@ class CepikAPI:
                 # Możliwe inne wskaźniki rate limiting
                 if 'X-RateLimit-Remaining' in response.headers:
                     remaining = int(response.headers.get('X-RateLimit-Remaining', 1))
-                    print(f"[DEBUG] X-RateLimit-Remaining: {remaining}")
+                    if remaining <= 5:  # Ostrzeżenie gdy zostało mało requestów
+                        print(f"[DEBUG] X-RateLimit-Remaining low: {remaining}")
                     if remaining <= 0:
                         print(f"[DEBUG] Rate limit detected: remaining={remaining}")
                         return True
                         
-                print(f"[DEBUG] No rate limit detected")
                 return False
             except Exception as e:
                 print(f"[DEBUG] Error in check_rate_limit: {e}")
@@ -534,12 +537,18 @@ class CepikAPI:
                     params['page'] = current_page
                     
                     # Czekaj jeśli jest rate limit
-                    print(f"[DEBUG] {voiv_name}: Waiting for rate_limit_event...")
                     rate_limit_event.wait()
-                    print(f"[DEBUG] {voiv_name}: Rate limit cleared, making request to page {current_page}")
+                    
+                    # Throttling - odczekaj minimalny czas od ostatniego zapytania
+                    with request_lock:
+                        current_time = time.time()
+                        time_since_last = current_time - last_request_time['time']
+                        if time_since_last < MIN_REQUEST_INTERVAL:
+                            sleep_time = MIN_REQUEST_INTERVAL - time_since_last
+                            time.sleep(sleep_time)
+                        last_request_time['time'] = time.time()
                     
                     response = self.session.get(url, params=params, timeout=30)
-                    print(f"[DEBUG] {voiv_name}: Got response for page {current_page}")
                     
                     # Sprawdź rate limiting
                     if check_rate_limit(response):
@@ -648,8 +657,8 @@ class CepikAPI:
         if progress_callback:
             progress_callback(statuses.copy())
         
-        # Wykonaj równolegle (max 5 jednocześnie)
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        # Wykonaj równolegle (max 3 jednocześnie - ograniczenie dla API)
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {executor.submit(fetch_voivodeship, code): code for code in voiv_codes}
             
             # Użyj as_completed() z timeoutem dla częstszych aktualizacji UI
