@@ -25,6 +25,17 @@ def init_api():
 
 api = init_api()
 
+# Cache'owane funkcje dla słowników - ważne przez 24 godziny
+@st.cache_data(ttl=86400)  # 24 godziny = 86400 sekund
+def get_cached_voivodeships():
+    """Pobiera listę województw z cache (24h)"""
+    return api.get_voivodeships()
+
+@st.cache_data(ttl=86400)  # 24 godziny
+def get_cached_dictionaries():
+    """Pobiera wszystkie słowniki z cache (24h)"""
+    return api.get_all_dictionaries()
+
 # Tytuł aplikacji
 st.title("🚗 BRONA - Bieżące Raporty O Nabytych Autach")
 st.markdown("Wyszukiwarka i analiza danych o pojazdach zarejestrowanych w Polsce (baza CEPiK)")
@@ -55,9 +66,8 @@ with st.expander("ℹ️ Jak działa aplikacja?"):
 # Sidebar z filtrami
 st.sidebar.header("🔍 Wyszukiwanie")
 
-# Pobieranie województw
-with st.spinner("Ładowanie województw..."):
-    voivodeships = api.get_voivodeships()
+# Pobieranie województw (cache 24h)
+voivodeships = get_cached_voivodeships()
 
 # 1. WOJEWÓDZTWO (wymagane)
 st.sidebar.markdown("### 📍 Województwo *")
@@ -151,10 +161,10 @@ st.session_state.date_to = date_to
 # 3. FILTRY API (wszystkie w jednej ramce)
 st.sidebar.markdown("### 🚀 Filtry wyszukiwania")
 st.sidebar.caption("⚡ Filtrowanie przez API - zwraca tylko pasujące pojazdy")
+st.sidebar.caption("📦 Słowniki odświeżane raz dziennie")
 
-# Pobierz słowniki z API
-with st.spinner("Ładowanie słowników..."):
-    dictionaries = api.get_all_dictionaries()
+# Pobierz słowniki z API (cache 24h)
+dictionaries = get_cached_dictionaries()
 
 with st.sidebar.expander("🔧 Wszystkie filtry", expanded=True):
     # Marka - z API (dropdown jeśli dostępne)
