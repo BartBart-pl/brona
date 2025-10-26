@@ -635,41 +635,25 @@ class CepikAPI:
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(fetch_voivodeship, code): code for code in voiv_codes}
             
-            # Uruchom wątek do periodic update callback
-            stop_monitor = threading.Event()
-            
-            def monitor_progress():
-                """Periodycznie wywołuj callback aby aktualizować UI"""
-                while not stop_monitor.is_set():
-                    if progress_callback:
-                        with rate_limit_lock:
-                            progress_callback(statuses.copy())
-                    time.sleep(0.5)  # Aktualizuj co 0.5s
-            
-            monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
-            monitor_thread.start()
-            
-            try:
-                for future in futures:
-                    code, vehicles, error = future.result()
-                    
-                    if error:
-                        errors.append(f"{self.WOJEWODZTWA_KODY.get(code, code)}: {error}")
-                    
-                    if vehicles:
-                        # Deduplicacja między województwami
-                        for vehicle in vehicles:
-                            vehicle_id = vehicle.get('id')
-                            if vehicle_id and vehicle_id not in seen_ids:
-                                seen_ids.add(vehicle_id)
-                                all_vehicles.append(vehicle)
-            finally:
-                # Zatrzymaj wątek monitorujący
-                stop_monitor.set()
-                monitor_thread.join(timeout=1)
+            # Czekaj na zakończenie każdego zadania i aktualizuj UI
+            for future in futures:
+                code, vehicles, error = future.result()
                 
-                # Ostatnie wywołanie callback z finalnymi statusami
+                if error:
+                    errors.append(f"{self.WOJEWODZTWA_KODY.get(code, code)}: {error}")
+                
+                if vehicles:
+                    # Deduplicacja między województwami
+                    for vehicle in vehicles:
+                        vehicle_id = vehicle.get('id')
+                        if vehicle_id and vehicle_id not in seen_ids:
+                            seen_ids.add(vehicle_id)
+                            all_vehicles.append(vehicle)
+                
+                # Aktualizuj UI po każdym zakończonym województwie
+                # (wywołane z głównego wątku, nie z osobnego wątku)
                 if progress_callback:
-                    progress_callback(statuses)
+                    with rate_limit_lock:
+                        progress_callback(statuses.copy())
         
         return all_vehicles, errors, statuses
