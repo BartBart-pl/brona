@@ -1,12 +1,25 @@
 /**
  * BRONA - Bieżące Raporty O Nabytych Autach
  * Client-side JavaScript application
- * Używa proxy serwera do obejścia CORS
+ *
+ * ARCHITEKTURA: 100% komunikacja po stronie klienta
+ * - Wszystkie requesty wykonywane bezpośrednio z przeglądarki
+ * - Używa Cloudflare Worker jako CORS proxy
+ * - Brak backendu - czysta aplikacja statyczna
  */
 
 // Konfiguracja
 const CONFIG = {
-    API_URL: '/api',  // Proxy server endpoint (zamiast bezpośrednio https://api.cepik.gov.pl)
+    // WAŻNE: Po wdrożeniu Cloudflare Worker, zmień poniższy URL na swój:
+    // API_URL: 'https://your-worker-name.your-subdomain.workers.dev',
+
+    // Dla developmentu lokalnego (z proxy_server.py):
+    // API_URL: '/api',
+    API_URL: 'https://wispy-sunset-6278.bartlomiej-bartczak.workers.dev/',
+
+    // Dla produkcji (Cloudflare Worker - WKLEJ SWÓJ URL):
+    // API_URL: 'https://brona-proxy.workers.dev',
+
     MAX_CONCURRENT_REQUESTS: 5,
     TIMEOUT: 30000,
     RETRY_DELAY: 1000,

@@ -22,7 +22,7 @@
             <span class="navbar-brand mb-0 h1">
                 <i class="bi bi-car-front-fill"></i> BRONA - Bieżące Raporty O Nabytych Autach
             </span>
-            <span class="badge bg-light text-dark">v3.0 Client-Side</span>
+            <span class="badge bg-light text-dark">v4.0 Full Client-Side</span>
         </div>
     </nav>
 
@@ -35,7 +35,7 @@
                 <!-- Info -->
                 <div class="alert alert-info alert-sm" role="alert">
                     <small>
-                        <i class="bi bi-info-circle"></i> Wszystkie zapytania wykonywane są bezpośrednio z Twojej przeglądarki do API CEPiK.
+                        <i class="bi bi-info-circle"></i> Aplikacja działa 100% po stronie klienta. Requesty idą przez Cloudflare Worker (serverless proxy) do API CEPiK.
                     </small>
                 </div>
 
@@ -172,10 +172,11 @@
                             <h6><i class="bi bi-exclamation-triangle"></i> Ważne informacje:</h6>
                             <ul class="mb-0">
                                 <li>⏱️ Pobieranie danych dla wszystkich województw może potrwać kilka minut</li>
-                                <li>🌐 Wszystkie zapytania są wykonywane bezpośrednio z Twojej przeglądarki</li>
+                                <li>🌐 Aplikacja działa w 100% po stronie klienta (statyczny HTML/JS)</li>
+                                <li>☁️ Używa Cloudflare Worker (serverless) jako CORS proxy do API CEPiK</li>
                                 <li>🔍 Możesz łączyć wyniki z wielu zapytań</li>
                                 <li>💾 Pobrane dane pozostają w pamięci przeglądarki (nie na serwerze)</li>
-                                <li>📈 Aplikacja nie obciąża serwera - działa w 100% po stronie klienta</li>
+                                <li>📈 Brak własnego backendu - można hostować na GitHub Pages, Netlify, Vercel</li>
                             </ul>
                         </div>
 
@@ -393,7 +394,7 @@
         <div class="container">
             <p class="mb-0"><strong>BRONA - Bieżące Raporty O Nabytych Autach</strong></p>
             <p class="mb-0">Dane pochodzą z Centralnej Ewidencji Pojazdów i Kierowców (CEPiK)</p>
-            <p class="mb-0">Aplikacja stworzona jako statyczna strona HTML/JS | © 2025 | v3.0</p>
+            <p class="mb-0">Aplikacja 100% kliencka (HTML/JS + Cloudflare Worker) | © 2025 | v4.0</p>
         </div>
     </footer>
 

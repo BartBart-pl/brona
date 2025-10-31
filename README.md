@@ -2,18 +2,19 @@
 
 Aplikacja webowa do wyszukiwania i analizy danych o pojazdach zarejestrowanych w Polsce z wykorzystaniem API CEPiK (Centralna Ewidencja Pojazdów i Kierowców).
 
-## 🆕 NOWOŚĆ: Wersja Client-Side (v3.0)
+## 🆕 NOWOŚĆ: Wersja Full Client-Side (v4.0)
 
-**⚡ Aplikacja została całkowicie przepisana!**
+**⚡ Aplikacja działa w 100% po stronie klienta!**
 
 Teraz dostępne są **dwie wersje**:
-1. **v3.0 Client-Side** (ZALECANA) - Statyczna strona HTML/JavaScript
-   - ✅ Wszystkie zapytania wykonywane **bezpośrednio z przeglądarki użytkownika**
-   - ✅ **Zero obciążenia serwera** - serwer tylko serwuje statyczne pliki
-   - ✅ **Nieograniczona skalowalność** - możesz obsłużyć tysiące użytkowników jednocześnie
-   - ✅ **Darmowy hosting** - GitHub Pages, Netlify, Vercel, prosty HTTP server
-   - 📖 Dokumentacja: [CLIENT_SIDE_README.md](CLIENT_SIDE_README.md)
-   - 🚀 Quick start: [QUICKSTART_CLIENT.md](QUICKSTART_CLIENT.md)
+1. **v4.0 Full Client-Side** (ZALECANA) - Statyczna strona HTML/JavaScript + Cloudflare Worker
+   - ✅ **100% komunikacja po stronie klienta** - wszystkie requesty z przeglądarki
+   - ✅ **Cloudflare Worker** (serverless) jako CORS proxy - darmowy, szybki, niezawodny
+   - ✅ **Zero własnego backendu** - brak serwera do utrzymania
+   - ✅ **Nieograniczona skalowalność** - Cloudflare CDN w 200+ lokalizacjach
+   - ✅ **Darmowy hosting** - GitHub Pages, Netlify, Vercel, Cloudflare Pages
+   - 📖 Dokumentacja wdrożenia: [CLOUDFLARE_WORKER_SETUP.md](CLOUDFLARE_WORKER_SETUP.md)
+   - 🚀 Pliki: `index.html`, `app.js`, `styles.css`, `worker.js`
 
 2. **v2.3 Server-Side** (STARSZA) - Aplikacja Streamlit
    - ⚠️ Wszystkie zapytania przez serwer (wysokie obciążenie)
@@ -27,29 +28,61 @@ Teraz dostępne są **dwie wersje**:
 
 | Sytuacja | Zalecana wersja |
 |----------|-----------------|
-| Chcę hostować dla wielu użytkowników | **v3.0 Client-Side** |
-| Chcę najtańszy hosting | **v3.0 Client-Side** |
-| Chcę prosty deployment | **v3.0 Client-Side** |
+| Chcę hostować dla wielu użytkowników | **v4.0 Full Client-Side** |
+| Chcę najtańszy hosting | **v4.0 Full Client-Side** (darmowe!) |
+| Chcę prosty deployment | **v4.0 Full Client-Side** |
+| Chcę maksymalną skalowalność | **v4.0 Full Client-Side** |
 | Chcę użyć do testów lokalnych | Obie wersje działają |
 | Potrzebuję backendu z logowaniem | v2.3 Server-Side |
 
 ---
 
-# 🚀 Quick Start - v3.0 Client-Side (ZALECANA)
+# 🚀 Quick Start - v4.0 Full Client-Side (ZALECANA)
+
+## Opcja A: Development lokalny (z proxy_server.py)
 
 ```bash
-# 1. Uruchom proxy server (rozwiązuje problem CORS)
+# 1. Uruchom proxy server (rozwiązuje problem CORS lokalnie)
 python proxy_server.py
 
 # 2. Otwórz przeglądarkę
 open http://localhost:8000
 ```
 
-**To wszystko!** Aplikacja działa w przeglądarce.
+## Opcja B: Produkcja (z Cloudflare Worker)
+
+**Krok 1: Wdróż Cloudflare Worker**
+```
+1. Utwórz konto na https://dash.cloudflare.com/ (darmowe)
+2. Workers & Pages -> Create Worker
+3. Skopiuj kod z pliku worker.js
+4. Deploy
+5. Skopiuj URL (np. https://brona-proxy.workers.dev)
+```
+
+**Krok 2: Zaktualizuj app.js**
+```javascript
+// W pliku app.js, zmień:
+API_URL: 'https://twoj-worker.workers.dev'
+```
+
+**Krok 3: Wdróż aplikację**
+```
+Upload pliki (index.html, app.js, styles.css) na:
+- GitHub Pages
+- Netlify
+- Vercel
+- Cloudflare Pages
+```
+
+**To wszystko!** Aplikacja działa w 100% po stronie klienta.
+
+📖 **Szczegółowa instrukcja:** [CLOUDFLARE_WORKER_SETUP.md](CLOUDFLARE_WORKER_SETUP.md)
 
 ### ⚠️ Problem CORS
-API CEPiK nie zwraca nagłówków CORS, więc bezpośrednie zapytania z przeglądarki są blokowane.  
-**Rozwiązanie:** Używamy prostego proxy serwera (`proxy_server.py`).  
+API CEPiK nie zwraca nagłówków CORS, więc bezpośrednie zapytania z przeglądarki są blokowane.
+**Rozwiązanie:** Cloudflare Worker (serverless) jako CORS proxy - darmowy, szybki, niezawodny.
+**Alternatywa:** Lokalny `proxy_server.py` do testów.
 📖 Szczegóły: [CORS_FIX.md](CORS_FIX.md)
 
 ---
@@ -167,13 +200,23 @@ Dane pochodzą z publicznego API CEPiK (Ministerstwo Cyfryzacji).
 
 ## 👨‍💻 Autor
 
-© 2025 | Wersja 3.0 (Client-Side) + v2.3 (Server-Side)
+© 2025 | Wersja 4.0 (Full Client-Side) + v2.3 (Server-Side)
 
 ## 🐛 Zgłaszanie błędów
 
 W przypadku znalezienia błędów, proszę o utworzenie issue w repozytorium GitHub.
 
 ## 🔄 Historia wersji
+
+### v4.0 (2025-10-31) - FULL CLIENT-SIDE 🚀
+- **100% KOMUNIKACJA PO STRONIE KLIENTA** - całkowite usunięcie zależności od własnego backendu
+- **Cloudflare Worker** jako serverless CORS proxy - darmowy, szybki, niezawodny
+- Zero własnego serwera - wszystko na infrastrukturze Cloudflare
+- Nieograniczona skalowalność - CDN w 200+ lokalizacjach globalnie
+- Darmowy hosting aplikacji + proxy (GitHub Pages + Cloudflare Worker)
+- Setup w 5 minut z pełną dokumentacją
+- Pliki: `worker.js`, zaktualizowane `app.js`, `index.html`
+- Dokumentacja: `CLOUDFLARE_WORKER_SETUP.md`
 
 ### v3.0 (2025-10-25) - CLIENT-SIDE REVOLUTION 🎉
 - **CAŁKOWITE PRZEPISANIE** aplikacji na statyczną stronę HTML/JavaScript
@@ -183,8 +226,7 @@ W przypadku znalezienia błędów, proszę o utworzenie issue w repozytorium Git
 - Prosty deployment - wystarczy Python HTTP server lub dowolny hosting statyczny
 - Wszystkie funkcje z v2.3 zachowane
 - Nowe: Responsywny design, Bootstrap 5, ulepszone UI
-- Pliki: `index.html`, `app.js`, `styles.css`, `serve.py`
-- Dokumentacja: `CLIENT_SIDE_README.md`, `QUICKSTART_CLIENT.md`
+- Pliki: `index.html`, `app.js`, `styles.css`, `proxy_server.py`
 
 ### v2.3 (2025-01-25) - Server-Side
 - Zmiana nazwy aplikacji na BRONA
