@@ -362,7 +362,10 @@ async function handleSearch() {
             if (v.attributes && v.attributes['wojewodztwo']) {
                 const voivCode = v.attributes['wojewodztwo'];
                 if (VOIVODESHIPS[voivCode]) {
-                    v.attributes['wojewodztwo-nazwa'] = VOIVODESHIPS[voivCode];
+                    // Zachowaj oryginalny kod jako 'wojewodztwo-kod'
+                    v.attributes['wojewodztwo-kod'] = voivCode;
+                    // Zamień wartość 'wojewodztwo' na słowną nazwę
+                    v.attributes['wojewodztwo'] = VOIVODESHIPS[voivCode];
                 }
             }
         });
@@ -392,9 +395,16 @@ async function handleSearch() {
         updateSearchInfo();
 
         // Automatycznie wygeneruj wykres po pobraniu danych
+        // Zwiększony timeout aby UI było gotowe
         setTimeout(() => {
+            console.log('Wywołanie generateAutoChart po timeout');
+            console.log('Stan przed generowaniem wykresu:', {
+                allVehicles: appState.allVehicles.length,
+                filteredVehicles: appState.filteredVehicles.length,
+                availableColumns: appState.availableColumns?.length
+            });
             generateAutoChart();
-        }, 500);
+        }, 1000);
         
     } catch (error) {
         console.error('Błąd wyszukiwania:', error);
@@ -681,32 +691,47 @@ function updateBatchSummary() {
 function applyFilters() {
     let filtered = [...appState.allVehicles];
 
+    // Bezpieczne pobieranie elementów (mogą nie istnieć w DOM)
+    const brandSelect = document.getElementById('filterBrand');
+    const typeSelect = document.getElementById('filterVehicleType');
+    const fuelSelect = document.getElementById('filterFuelType');
+
     // Filtr marki
-    const selectedBrands = Array.from(document.getElementById('filterBrand').selectedOptions).map(o => o.value);
-    if (selectedBrands.length > 0) {
-        filtered = filtered.filter(v => selectedBrands.includes(v.attributes?.marka));
+    if (brandSelect) {
+        const selectedBrands = Array.from(brandSelect.selectedOptions).map(o => o.value);
+        if (selectedBrands.length > 0) {
+            filtered = filtered.filter(v => selectedBrands.includes(v.attributes?.marka));
+        }
     }
 
     // Filtr rodzaju pojazdu
-    const selectedTypes = Array.from(document.getElementById('filterVehicleType').selectedOptions).map(o => o.value);
-    if (selectedTypes.length > 0) {
-        filtered = filtered.filter(v => selectedTypes.includes(v.attributes?.['rodzaj-pojazdu']));
+    if (typeSelect) {
+        const selectedTypes = Array.from(typeSelect.selectedOptions).map(o => o.value);
+        if (selectedTypes.length > 0) {
+            filtered = filtered.filter(v => selectedTypes.includes(v.attributes?.['rodzaj-pojazdu']));
+        }
     }
 
     // Filtr paliwa
-    const selectedFuels = Array.from(document.getElementById('filterFuelType').selectedOptions).map(o => o.value);
-    if (selectedFuels.length > 0) {
-        filtered = filtered.filter(v => selectedFuels.includes(v.attributes?.['rodzaj-paliwa']));
+    if (fuelSelect) {
+        const selectedFuels = Array.from(fuelSelect.selectedOptions).map(o => o.value);
+        if (selectedFuels.length > 0) {
+            filtered = filtered.filter(v => selectedFuels.includes(v.attributes?.['rodzaj-paliwa']));
+        }
     }
 
     // Filtr roku
-    const maxYear = parseInt(document.getElementById('filterYearRange').value);
-    const minYear = parseInt(document.getElementById('filterYearRange').min);
-    if (maxYear < parseInt(document.getElementById('filterYearRange').max)) {
-        filtered = filtered.filter(v => {
-            const year = parseInt(v.attributes?.['rok-produkcji']);
-            return year >= minYear && year <= maxYear;
-        });
+    const yearRange = document.getElementById('filterYearRange');
+    if (yearRange) {
+        const maxYear = parseInt(yearRange.value);
+        const minYear = parseInt(yearRange.min);
+        const rangeMax = parseInt(yearRange.max);
+        if (maxYear < rangeMax) {
+            filtered = filtered.filter(v => {
+                const year = parseInt(v.attributes?.['rok-produkcji']);
+                return year >= minYear && year <= maxYear;
+            });
+        }
     }
 
     // Zastosuj dynamiczne filtry
@@ -728,6 +753,8 @@ function applyFilters() {
 
     appState.filteredVehicles = filtered;
     appState.currentPage = 1;
+
+    console.log(`Filtry zastosowane: ${appState.allVehicles.length} -> ${appState.filteredVehicles.length} pojazdów`);
 
     // Aktualizuj UI
     updateStatistics();
@@ -1228,7 +1255,17 @@ function renderPagination() {
 
 // Automatyczne generowanie wykresu po pobraniu danych
 function generateAutoChart() {
-    if (appState.filteredVehicles.length === 0) {
+    // Sprawdź czy są dane
+    const dataLength = appState.filteredVehicles.length > 0 ? appState.filteredVehicles.length : appState.allVehicles.length;
+
+    console.log('Auto-generowanie wykresu:', {
+        allVehicles: appState.allVehicles.length,
+        filteredVehicles: appState.filteredVehicles.length,
+        availableColumns: appState.availableColumns?.length
+    });
+
+    if (dataLength === 0) {
+        console.warn('Brak danych do automatycznego wygenerowania wykresu');
         return;
     }
 
@@ -1252,15 +1289,23 @@ function generateAutoChart() {
     }
 
     if (!columnToVisualize) {
+        console.warn('Brak dostępnych kolumn do wizualizacji');
         return;
     }
+
+    console.log(`Wybrano kolumnę do wizualizacji: ${columnToVisualize}`);
 
     // Ustaw parametry wykresu
     document.getElementById('chartColumn').value = columnToVisualize;
     document.getElementById('chartType').value = 'bar';
 
     // Wygeneruj wykres
-    generateChart();
+    try {
+        generateChart();
+        console.log('Wykres wygenerowany pomyślnie');
+    } catch (error) {
+        console.error('Błąd generowania wykresu:', error);
+    }
 
     // Scroll do wykresu
     setTimeout(() => {
@@ -1278,10 +1323,17 @@ function generateChart() {
     const columnY = document.getElementById('chartColumnY').value;
     const topN = parseInt(document.getElementById('chartTopN').value);
 
-    const data = appState.filteredVehicles;
+    // Użyj filteredVehicles jeśli istnieją, w przeciwnym razie allVehicles
+    const data = appState.filteredVehicles.length > 0 ? appState.filteredVehicles : appState.allVehicles;
+
+    console.log(`Generowanie wykresu: typ=${chartType}, kolumna=${column}, dane=${data.length}`);
 
     if (data.length === 0) {
-        alert('Brak danych do wizualizacji!');
+        console.error('Brak danych do wizualizacji!', {
+            allVehicles: appState.allVehicles.length,
+            filteredVehicles: appState.filteredVehicles.length
+        });
+        alert('Brak danych do wizualizacji! Spróbuj zresetować filtry.');
         return;
     }
 
