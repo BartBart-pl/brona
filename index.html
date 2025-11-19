@@ -369,11 +369,27 @@
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Rok produkcji</label>
-                                    <input type="range" class="form-range" id="filterYearRange" min="1900" max="2030" step="1">
-                                    <div class="d-flex justify-content-between">
-                                        <span id="filterYearMin">1900</span>
-                                        <span id="filterYearMax">2030</span>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <label class="form-label small">Od:</label>
+                                            <input type="number" class="form-control form-control-sm"
+                                                id="filterYearMinInput"
+                                                placeholder="1900"
+                                                min="1900"
+                                                max="2030"
+                                                step="1">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small">Do:</label>
+                                            <input type="number" class="form-control form-control-sm"
+                                                id="filterYearMaxInput"
+                                                placeholder="2030"
+                                                min="1900"
+                                                max="2030"
+                                                step="1">
+                                        </div>
                                     </div>
+                                    <small class="text-muted">Zakres: <span id="filterYearMin">1900</span> - <span id="filterYearMax">2030</span></small>
                                 </div>
                             </div>
                             <button class="btn btn-sm btn-secondary mt-3" id="resetFiltersBtn">

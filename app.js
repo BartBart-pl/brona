@@ -213,6 +213,20 @@ function formatDateAPI(dateString) {
     return dateString.replace(/-/g, '');
 }
 
+// Setup filtra zakresu roku produkcji
+function setupYearRangeFilter() {
+    const minInput = document.getElementById('filterYearMinInput');
+    const maxInput = document.getElementById('filterYearMaxInput');
+
+    const updateFilter = () => {
+        applyFilters();
+    };
+
+    // Filtruj przy zmianie wartości
+    minInput.addEventListener('change', updateFilter);
+    maxInput.addEventListener('change', updateFilter);
+}
+
 // Setup event listeners
 function setupEventListeners() {
     // Przyciski dat
@@ -253,10 +267,10 @@ function setupEventListeners() {
     document.getElementById('filterBrand').addEventListener('change', applyFilters);
     document.getElementById('filterVehicleType').addEventListener('change', applyFilters);
     document.getElementById('filterFuelType').addEventListener('change', applyFilters);
-    document.getElementById('filterYearRange').addEventListener('input', (e) => {
-        document.getElementById('filterYearMax').textContent = e.target.value;
-        applyFilters();
-    });
+
+    // Podwójny suwak dla roku produkcji
+    setupYearRangeFilter();
+
     document.getElementById('resetFiltersBtn').addEventListener('click', resetFilters);
 
     // Dynamiczne filtry
@@ -720,18 +734,17 @@ function applyFilters() {
         }
     }
 
-    // Filtr roku
-    const yearRange = document.getElementById('filterYearRange');
-    if (yearRange) {
-        const maxYear = parseInt(yearRange.value);
-        const minYear = parseInt(yearRange.min);
-        const rangeMax = parseInt(yearRange.max);
-        if (maxYear < rangeMax) {
-            filtered = filtered.filter(v => {
-                const year = parseInt(v.attributes?.['rok-produkcji']);
-                return year >= minYear && year <= maxYear;
-            });
-        }
+    // Filtr roku (pola od-do)
+    const yearMinInput = document.getElementById('filterYearMinInput');
+    const yearMaxInput = document.getElementById('filterYearMaxInput');
+    if (yearMinInput && yearMaxInput) {
+        const minYear = yearMinInput.value ? parseInt(yearMinInput.value) : parseInt(yearMinInput.min);
+        const maxYear = yearMaxInput.value ? parseInt(yearMaxInput.value) : parseInt(yearMaxInput.max);
+
+        filtered = filtered.filter(v => {
+            const year = parseInt(v.attributes?.['rok-produkcji']);
+            return !isNaN(year) && year >= minYear && year <= maxYear;
+        });
     }
 
     // Zastosuj dynamiczne filtry
@@ -767,8 +780,15 @@ function resetFilters() {
     document.getElementById('filterBrand').selectedIndex = -1;
     document.getElementById('filterVehicleType').selectedIndex = -1;
     document.getElementById('filterFuelType').selectedIndex = -1;
-    document.getElementById('filterYearRange').value = document.getElementById('filterYearRange').max;
-    document.getElementById('filterYearMax').textContent = document.getElementById('filterYearRange').max;
+
+    // Reset pól roku
+    const yearMinInput = document.getElementById('filterYearMinInput');
+    const yearMaxInput = document.getElementById('filterYearMaxInput');
+
+    if (yearMinInput && yearMaxInput) {
+        yearMinInput.value = '';
+        yearMaxInput.value = '';
+    }
 
     // Reset dynamicznych filtrów
     appState.dynamicFilters = {};
@@ -804,87 +824,47 @@ function updateDynamicFilters() {
         const isNumeric = values.every(v => !isNaN(parseFloat(v)));
 
         if (isNumeric && uniqueValues.length > 20) {
-            // Numeryczny filtr (podwójny suwak od-do)
+            // Numeryczny filtr (pola od-do)
             const numericValues = values.map(v => parseFloat(v));
             const min = Math.min(...numericValues);
             const max = Math.max(...numericValues);
 
             col.innerHTML = `
                 <label class="form-label"><strong>🔢 ${column}</strong></label>
-                <div class="range-slider-container">
-                    <!-- Pola input do wpisania wartości -->
-                    <div class="row g-2 mb-2">
-                        <div class="col-6">
-                            <label class="form-label small mb-0">Od:</label>
-                            <input type="number" class="form-control form-control-sm"
-                                id="dynamicFilterMinInput_${idx}"
-                                value="${min}"
-                                min="${min}"
-                                max="${max}"
-                                step="1">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small mb-0">Do:</label>
-                            <input type="number" class="form-control form-control-sm"
-                                id="dynamicFilterMaxInput_${idx}"
-                                value="${max}"
-                                min="${min}"
-                                max="${max}"
-                                step="1">
-                        </div>
-                    </div>
-
-                    <!-- Podwójny suwak -->
-                    <div class="double-range-slider">
-                        <input type="range" class="form-range range-min"
-                            id="dynamicFilterMinSlider_${idx}"
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small">Od:</label>
+                        <input type="number" class="form-control form-control-sm"
+                            id="dynamicFilterMinInput_${idx}"
+                            placeholder="${min.toFixed(0)}"
                             min="${min}"
                             max="${max}"
-                            value="${min}"
-                            step="1">
-                        <input type="range" class="form-range range-max"
-                            id="dynamicFilterMaxSlider_${idx}"
-                            min="${min}"
-                            max="${max}"
-                            value="${max}"
                             step="1">
                     </div>
-
-                    <div class="d-flex justify-content-between mt-1">
-                        <small class="text-muted">${min.toFixed(0)}</small>
-                        <small class="text-muted" id="dynamicFilterRangeDisplay_${idx}">
-                            ${min.toFixed(0)} - ${max.toFixed(0)}
-                        </small>
-                        <small class="text-muted">${max.toFixed(0)}</small>
+                    <div class="col-6">
+                        <label class="form-label small">Do:</label>
+                        <input type="number" class="form-control form-control-sm"
+                            id="dynamicFilterMaxInput_${idx}"
+                            placeholder="${max.toFixed(0)}"
+                            min="${min}"
+                            max="${max}"
+                            step="1">
                     </div>
                 </div>
+                <small class="text-muted">Zakres: ${min.toFixed(0)} - ${max.toFixed(0)}</small>
             `;
 
             container.appendChild(col);
 
-            // Event listeners - synchronizacja suwaków i inputów
+            // Event listeners
             setTimeout(() => {
                 const minInput = document.getElementById(`dynamicFilterMinInput_${idx}`);
                 const maxInput = document.getElementById(`dynamicFilterMaxInput_${idx}`);
-                const minSlider = document.getElementById(`dynamicFilterMinSlider_${idx}`);
-                const maxSlider = document.getElementById(`dynamicFilterMaxSlider_${idx}`);
-                const rangeDisplay = document.getElementById(`dynamicFilterRangeDisplay_${idx}`);
 
                 const updateFilter = () => {
-                    let minVal = parseFloat(minInput.value);
-                    let maxVal = parseFloat(maxInput.value);
+                    const minVal = minInput.value ? parseFloat(minInput.value) : min;
+                    const maxVal = maxInput.value ? parseFloat(maxInput.value) : max;
 
-                    // Walidacja - min nie może być większe niż max
-                    if (minVal > maxVal) {
-                        minVal = maxVal;
-                        minInput.value = minVal;
-                        minSlider.value = minVal;
-                    }
-
-                    // Aktualizuj wyświetlany zakres
-                    rangeDisplay.textContent = `${minVal.toFixed(0)} - ${maxVal.toFixed(0)}`;
-
-                    // Zastosuj filtr
                     appState.dynamicFilters[column] = {
                         min: minVal,
                         max: maxVal
@@ -892,45 +872,8 @@ function updateDynamicFilters() {
                     applyFilters();
                 };
 
-                // Synchronizacja input -> slider
-                minInput.addEventListener('input', () => {
-                    minSlider.value = minInput.value;
-                    updateFilter();
-                });
-
-                maxInput.addEventListener('input', () => {
-                    maxSlider.value = maxInput.value;
-                    updateFilter();
-                });
-
-                // Synchronizacja slider -> input
-                minSlider.addEventListener('input', () => {
-                    const val = parseFloat(minSlider.value);
-                    const maxVal = parseFloat(maxSlider.value);
-
-                    // Nie pozwól minSlider przesunąć się powyżej maxSlider
-                    if (val > maxVal) {
-                        minSlider.value = maxVal;
-                        minInput.value = maxVal;
-                    } else {
-                        minInput.value = val;
-                    }
-                    updateFilter();
-                });
-
-                maxSlider.addEventListener('input', () => {
-                    const val = parseFloat(maxSlider.value);
-                    const minVal = parseFloat(minSlider.value);
-
-                    // Nie pozwól maxSlider przesunąć się poniżej minSlider
-                    if (val < minVal) {
-                        maxSlider.value = minVal;
-                        maxInput.value = minVal;
-                    } else {
-                        maxInput.value = val;
-                    }
-                    updateFilter();
-                });
+                minInput.addEventListener('change', updateFilter);
+                maxInput.addEventListener('change', updateFilter);
             }, 10);
         } else {
             // Kategoryczny filtr (multi-select)
@@ -1027,13 +970,25 @@ function updateFilterOptions() {
     populateMultiSelect('filterVehicleType', Array.from(types).sort());
     populateMultiSelect('filterFuelType', Array.from(fuels).sort());
 
-    // Aktualizuj slider roku
-    const yearRange = document.getElementById('filterYearRange');
-    yearRange.min = minYear;
-    yearRange.max = maxYear;
-    yearRange.value = maxYear;
-    document.getElementById('filterYearMin').textContent = minYear;
-    document.getElementById('filterYearMax').textContent = maxYear;
+    // Aktualizuj pola roku
+    const yearMinInput = document.getElementById('filterYearMinInput');
+    const yearMaxInput = document.getElementById('filterYearMaxInput');
+
+    if (yearMinInput && yearMaxInput) {
+        // Ustaw nowe min/max
+        yearMinInput.min = minYear;
+        yearMinInput.max = maxYear;
+        yearMaxInput.min = minYear;
+        yearMaxInput.max = maxYear;
+
+        // Ustaw placeholder
+        yearMinInput.placeholder = minYear;
+        yearMaxInput.placeholder = maxYear;
+
+        // Aktualizuj etykiety zakresu
+        document.getElementById('filterYearMin').textContent = minYear;
+        document.getElementById('filterYearMax').textContent = maxYear;
+    }
 
     // Inicjalizuj opcje dla dynamicznych filtrów
     const columnsToFilterSelect = document.getElementById('columnsToFilter');
