@@ -31,12 +31,20 @@ async function handleRequest(request) {
   const url = new URL(request.url)
 
   // Wyciągnij ścieżkę API (wszystko po hostname)
-  const apiPath = url.pathname + url.search
+  let apiPath = url.pathname + url.search
+
+  // Normalizuj path - usuń podwójne slashe
+  apiPath = apiPath.replace(/\/+/g, '/')
+
+  // Upewnij się że zaczyna się od /
+  if (!apiPath.startsWith('/')) {
+    apiPath = '/' + apiPath
+  }
 
   // Zbuduj URL do API CEPiK
   const cepikUrl = `https://api.cepik.gov.pl${apiPath}`
 
-  console.log(`Proxy: ${apiPath} -> ${cepikUrl}`)
+  console.log(`Proxy: ${url.pathname}${url.search} -> ${cepikUrl}`)
 
   try {
     // Stwórz nowy request do API CEPiK
@@ -44,7 +52,7 @@ async function handleRequest(request) {
       method: request.method,
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'BRONA/3.0-Cloudflare',
+        'User-Agent': 'BRONA/4.0-Cloudflare',
         'Content-Type': 'application/json'
       }
     })
@@ -52,11 +60,25 @@ async function handleRequest(request) {
     // Wykonaj request do API CEPiK
     const response = await fetch(apiRequest)
 
-    // Pobierz dane
-    const data = await response.arrayBuffer()
+    // Pobierz dane jako text (dla lepszego error handling)
+    const responseText = await response.text()
+
+    // Sprawdź czy to JSON error
+    let responseData
+    try {
+      responseData = JSON.parse(responseText)
+
+      // Jeśli API zwróciło błąd, loguj to
+      if (responseData.errors && responseData.errors.length > 0) {
+        console.error('API CEPiK Error:', responseData.errors[0])
+      }
+    } catch (e) {
+      // Nie jest JSON - zwróć jako text
+      responseData = { raw: responseText }
+    }
 
     // Zwróć odpowiedź z nagłówkami CORS
-    return new Response(data, {
+    return new Response(JSON.stringify(responseData), {
       status: response.status,
       statusText: response.statusText,
       headers: {
@@ -64,7 +86,7 @@ async function handleRequest(request) {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Accept',
-        'Cache-Control': 'public, max-age=300', // Cache na 5 minut
+        'Cache-Control': 'public, max-age=60', // Cache na 1 minutę (nie 5 - dla świeższych danych)
         // Przekaż rate limit headers jeśli są
         ...(response.headers.get('X-RateLimit-Limit') && {
           'X-RateLimit-Limit': response.headers.get('X-RateLimit-Limit'),
@@ -79,9 +101,12 @@ async function handleRequest(request) {
     console.error('Worker Error:', error)
 
     return new Response(JSON.stringify({
-      error: 'Proxy Error',
-      message: error.message,
-      details: 'Nie można połączyć się z API CEPiK'
+      errors: [{
+        'error-result': 'Proxy Error',
+        'error-reason': error.message,
+        'error-code': 'WORKER-ERROR',
+        'error-solution': 'Sprawdź połączenie z API CEPiK'
+      }]
     }), {
       status: 502,
       headers: {

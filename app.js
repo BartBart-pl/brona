@@ -45,6 +45,16 @@ const VOIVODESHIPS = {
     '32': 'ZACHODNIOPOMORSKIE'
 };
 
+// Helper function: Mapuj kod województwa na nazwę (lub zwróć wartość jeśli nie jest kodem)
+function mapVoivodeshipValue(value) {
+    if (!value) return value;
+    // Sprawdź czy to kod województwa (2-cyfrowy string)
+    if (typeof value === 'string' && /^\d{2}$/.test(value) && VOIVODESHIPS[value]) {
+        return VOIVODESHIPS[value];
+    }
+    return value;
+}
+
 // Stan aplikacji
 let appState = {
     allVehicles: [],
@@ -537,6 +547,13 @@ async function searchVoivodeship(code, dateFrom, dateTo, filters, progressCallba
         try {
             const response = await fetchWithTimeout(`${CONFIG.API_URL}/pojazdy?${params}`);
             const data = await response.json();
+
+            // Sprawdź czy API zwróciło błąd
+            if (data.errors && data.errors.length > 0) {
+                const apiError = data.errors[0];
+                console.error('❌ API CEPiK error:', apiError);
+                throw new Error(`API CEPiK: ${apiError['error-result'] || apiError['error-reason'] || 'Unknown error'} (${apiError['error-code'] || 'no code'})`);
+            }
 
             if (data.data && data.data.length > 0) {
                 vehicles.push(...data.data);
@@ -1096,14 +1113,19 @@ function updateDynamicFilters() {
     const container = document.getElementById('dynamicFiltersContainer');
     const selectedColumns = Array.from(select.selectedOptions).map(o => o.value);
 
+    console.log('🔍 updateDynamicFilters wywołane, wybrano kolumny:', selectedColumns);
+
     // Wyczyść dynamiczne filtry
     appState.dynamicFilters = {};
     container.innerHTML = '';
 
     if (selectedColumns.length === 0) {
+        console.log('ℹ️ Brak wybranych kolumn, czyszczenie filtrów');
         applyFilters();
         return;
     }
+
+    console.log(`📋 Generowanie ${selectedColumns.length} dynamicznych filtrów...`);
 
     // Dla każdej wybranej kolumny stwórz odpowiedni filtr
     selectedColumns.forEach((column, idx) => {
@@ -1465,7 +1487,11 @@ function renderTable() {
         idCell.appendChild(idLink);
 
         columns.forEach(col => {
-            row.insertCell().textContent = attrs[col] || '-';
+            const value = attrs[col] || '-';
+            // Mapuj kody województw na nazwy
+            const displayValue = col === 'wojewodztwo' || col === 'wojewodztwo-kod' ?
+                mapVoivodeshipValue(value) : value;
+            row.insertCell().textContent = displayValue;
         });
     });
 
@@ -1684,7 +1710,12 @@ function generateChart() {
     const container = document.getElementById('chartContainer');
 
     if (chartType === 'bar') {
-        const values = data.map(v => v.attributes?.[column]).filter(Boolean);
+        const values = data.map(v => {
+            const val = v.attributes?.[column];
+            // Mapuj kody województw
+            return column.includes('wojewodztwo') ? mapVoivodeshipValue(val) : val;
+        }).filter(Boolean);
+
         if (values.length === 0) {
             alert('Brak danych dla wybranej kolumny!');
             return;
@@ -1697,7 +1728,11 @@ function generateChart() {
                 const batchData = data.filter(v => v._batch_id === batchId);
                 const counts = {};
                 batchData.forEach(v => {
-                    const val = v.attributes?.[column];
+                    let val = v.attributes?.[column];
+                    // Mapuj kody województw
+                    if (column.includes('wojewodztwo')) {
+                        val = mapVoivodeshipValue(val);
+                    }
                     if (val) counts[val] = (counts[val] || 0) + 1;
                 });
                 const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, topN);
@@ -1738,7 +1773,12 @@ function generateChart() {
         }
 
     } else if (chartType === 'pie') {
-        const values = data.map(v => v.attributes?.[column]).filter(Boolean);
+        const values = data.map(v => {
+            const val = v.attributes?.[column];
+            // Mapuj kody województw
+            return column.includes('wojewodztwo') ? mapVoivodeshipValue(val) : val;
+        }).filter(Boolean);
+
         if (values.length === 0) {
             alert('Brak danych dla wybranej kolumny!');
             return;
