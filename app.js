@@ -226,6 +226,83 @@ function setupYearRangeFilter() {
     maxInput.addEventListener('change', updateFilter);
 }
 
+// Setup enhanced multi-select (klik=toggle, drag=select, shift=range)
+function setupEnhancedMultiSelect() {
+    const multiSelects = document.querySelectorAll('.multi-select-enhanced');
+
+    multiSelects.forEach(select => {
+        let isDragging = false;
+        let lastSelectedIndex = -1;
+        let dragStartSelected = false;
+
+        // Zapobiegaj domyślnemu zachowaniu multi-select
+        select.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'OPTION') {
+                e.preventDefault();
+
+                const option = e.target;
+                const index = Array.from(select.options).indexOf(option);
+
+                // Shift + klik = zaznacz zakres
+                if (e.shiftKey && lastSelectedIndex !== -1) {
+                    const start = Math.min(lastSelectedIndex, index);
+                    const end = Math.max(lastSelectedIndex, index);
+
+                    for (let i = start; i <= end; i++) {
+                        select.options[i].selected = true;
+                    }
+
+                    // Trigger change event
+                    select.dispatchEvent(new Event('change'));
+                } else {
+                    // Normalny klik = toggle
+                    option.selected = !option.selected;
+                    lastSelectedIndex = index;
+
+                    // Rozpocznij drag
+                    isDragging = true;
+                    dragStartSelected = option.selected;
+                    select.classList.add('dragging');
+
+                    // Trigger change event
+                    select.dispatchEvent(new Event('change'));
+                }
+            }
+        });
+
+        // Podczas przeciągania
+        select.addEventListener('mouseover', (e) => {
+            if (isDragging && e.target.tagName === 'OPTION') {
+                e.target.selected = dragStartSelected;
+                e.target.classList.add('drag-hover');
+
+                // Trigger change event
+                select.dispatchEvent(new Event('change'));
+            }
+        });
+
+        select.addEventListener('mouseout', (e) => {
+            if (e.target.tagName === 'OPTION') {
+                e.target.classList.remove('drag-hover');
+            }
+        });
+
+        // Zakończ drag
+        select.addEventListener('mouseup', () => {
+            isDragging = false;
+            select.classList.remove('dragging');
+        });
+
+        // Globalne mouseup (gdy mysz wychodzi poza select)
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                select.classList.remove('dragging');
+            }
+        });
+    });
+}
+
 // Setup event listeners
 function setupEventListeners() {
     // Przyciski dat
@@ -315,6 +392,9 @@ function setupEventListeners() {
     // Eksport
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
     document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
+
+    // Setup enhanced multi-select (klik=toggle, drag=select, shift=range)
+    setupEnhancedMultiSelect();
 }
 
 // Główna funkcja wyszukiwania
@@ -1024,6 +1104,9 @@ function updateFilterOptions() {
 
     // Aktualizuj opcje wykresów
     updateChartColumnOptions(sortedColumns);
+
+    // Re-inicjalizuj enhanced multi-select dla nowo dodanych opcji
+    setupEnhancedMultiSelect();
 }
 
 // Aktualizacja opcji kolumn w wykresach
@@ -1091,11 +1174,12 @@ function handleSort(column) {
         appState.sortColumn = column;
         appState.sortDirection = 'asc';
     }
-    
+
     appState.filteredVehicles.sort((a, b) => {
-        let valA = a.attributes?.[column];
-        let valB = b.attributes?.[column];
-        
+        // Obsługa kolumny 'id' (vehicle.id zamiast attributes)
+        let valA = column === 'id' ? a.id : a.attributes?.[column];
+        let valB = column === 'id' ? b.id : b.attributes?.[column];
+
         // Konwersja do liczb jeśli możliwe
         const numA = parseFloat(valA);
         const numB = parseFloat(valB);
@@ -1103,12 +1187,12 @@ function handleSort(column) {
             valA = numA;
             valB = numB;
         }
-        
+
         if (valA < valB) return appState.sortDirection === 'asc' ? -1 : 1;
         if (valA > valB) return appState.sortDirection === 'asc' ? 1 : -1;
         return 0;
     });
-    
+
     renderTable();
 }
 
@@ -1130,6 +1214,15 @@ function renderTable() {
     const headerRow = thead.insertRow();
     headerRow.insertCell().textContent = 'Lp.';
 
+    // Dodaj kolumnę ID pojazdu
+    const idTh = document.createElement('th');
+    idTh.textContent = 'ID pojazdu';
+    idTh.className = 'sortable';
+    idTh.dataset.column = 'id';
+    idTh.innerHTML = `ID pojazdu <i class="bi bi-arrow-down-up"></i>`;
+    idTh.addEventListener('click', () => handleSort('id'));
+    headerRow.appendChild(idTh);
+
     columns.forEach(col => {
         const th = document.createElement('th');
         th.className = 'sortable';
@@ -1147,6 +1240,16 @@ function renderTable() {
         const row = tbody.insertRow();
 
         row.insertCell().textContent = start + idx + 1;
+
+        // Dodaj kolumnę ID pojazdu jako link
+        const idCell = row.insertCell();
+        const idLink = document.createElement('a');
+        idLink.href = `https://api.cepik.gov.pl/pojazdy/${vehicle.id}`;
+        idLink.target = '_blank';
+        idLink.textContent = vehicle.id;
+        idLink.className = 'text-primary';
+        idLink.title = 'Otwórz szczegóły pojazdu w nowej karcie';
+        idCell.appendChild(idLink);
 
         columns.forEach(col => {
             row.insertCell().textContent = attrs[col] || '-';
@@ -1223,40 +1326,110 @@ function generateAutoChart() {
         return;
     }
 
-    // Wybierz odpowiednią kolumnę do wizualizacji
+    // Wszystkie dostępne kolumny
     const availableColumns = appState.availableColumns || [];
-    let columnToVisualize = null;
-
-    // Priorytety kolumn do wizualizacji
-    const priorityColumns = ['marka', 'rodzaj-pojazdu', 'rodzaj-paliwa', 'rok-produkcji'];
-
-    for (const col of priorityColumns) {
-        if (availableColumns.includes(col)) {
-            columnToVisualize = col;
-            break;
-        }
-    }
-
-    // Jeśli nie znaleziono priorytetowej kolumny, użyj pierwszej dostępnej
-    if (!columnToVisualize && availableColumns.length > 0) {
-        columnToVisualize = availableColumns[0];
-    }
-
-    if (!columnToVisualize) {
+    if (availableColumns.length === 0) {
         console.warn('Brak dostępnych kolumn do wizualizacji');
         return;
     }
 
-    console.log(`Wybrano kolumnę do wizualizacji: ${columnToVisualize}`);
+    // Losowy typ wykresu
+    const chartTypes = ['bar', 'pie', 'histogram', 'scatter', 'box'];
+    const randomChartType = chartTypes[Math.floor(Math.random() * chartTypes.length)];
+
+    // Rozróżnij kolumny kategoryczne i numeryczne
+    const categoricalColumns = [];
+    const numericalColumns = [];
+
+    availableColumns.forEach(col => {
+        // Sprawdź pierwszy pojazd aby określić typ kolumny
+        const sampleValue = appState.allVehicles[0]?.attributes?.[col];
+        if (sampleValue !== undefined && sampleValue !== null) {
+            const num = parseFloat(sampleValue);
+            if (!isNaN(num)) {
+                numericalColumns.push(col);
+            } else {
+                categoricalColumns.push(col);
+            }
+        }
+    });
+
+    console.log(`Losowy typ wykresu: ${randomChartType}`);
+
+    // Wybierz kolumny w zależności od typu wykresu
+    let columnX = null;
+    let columnY = null;
+
+    if (randomChartType === 'bar' || randomChartType === 'pie') {
+        // Bar i Pie - kolumny kategoryczne
+        if (categoricalColumns.length > 0) {
+            columnX = categoricalColumns[Math.floor(Math.random() * categoricalColumns.length)];
+        } else {
+            // Fallback do jakiejkolwiek kolumny
+            columnX = availableColumns[Math.floor(Math.random() * availableColumns.length)];
+        }
+    } else if (randomChartType === 'histogram') {
+        // Histogram - kolumny numeryczne
+        if (numericalColumns.length > 0) {
+            columnX = numericalColumns[Math.floor(Math.random() * numericalColumns.length)];
+        } else {
+            // Fallback do pierwszej dostępnej
+            columnX = availableColumns[0];
+        }
+    } else if (randomChartType === 'scatter') {
+        // Scatter - 2 kolumny numeryczne
+        if (numericalColumns.length >= 2) {
+            // Losuj 2 różne kolumny numeryczne
+            const shuffled = [...numericalColumns].sort(() => 0.5 - Math.random());
+            columnX = shuffled[0];
+            columnY = shuffled[1];
+        } else if (numericalColumns.length === 1) {
+            columnX = numericalColumns[0];
+            columnY = availableColumns.find(c => c !== columnX) || availableColumns[0];
+        } else {
+            // Fallback do losowych kolumn
+            const shuffled = [...availableColumns].sort(() => 0.5 - Math.random());
+            columnX = shuffled[0];
+            columnY = shuffled[1] || shuffled[0];
+        }
+    } else if (randomChartType === 'box') {
+        // Box - kolumna kategoryczna (X) i numeryczna (Y)
+        if (categoricalColumns.length > 0 && numericalColumns.length > 0) {
+            columnX = categoricalColumns[Math.floor(Math.random() * categoricalColumns.length)];
+            columnY = numericalColumns[Math.floor(Math.random() * numericalColumns.length)];
+        } else if (categoricalColumns.length > 0) {
+            columnX = categoricalColumns[Math.floor(Math.random() * categoricalColumns.length)];
+            columnY = availableColumns.find(c => c !== columnX) || availableColumns[0];
+        } else {
+            // Fallback
+            const shuffled = [...availableColumns].sort(() => 0.5 - Math.random());
+            columnX = shuffled[0];
+            columnY = shuffled[1] || shuffled[0];
+        }
+    }
+
+    if (!columnX) {
+        console.warn('Nie można wybrać kolumny do wizualizacji');
+        return;
+    }
+
+    console.log(`Wybrano kolumny: X=${columnX}, Y=${columnY || 'brak'}`);
 
     // Ustaw parametry wykresu
-    document.getElementById('chartColumn').value = columnToVisualize;
-    document.getElementById('chartType').value = 'bar';
+    document.getElementById('chartType').value = randomChartType;
+    document.getElementById('chartColumn').value = columnX;
+
+    if (columnY && document.getElementById('chartColumnY')) {
+        document.getElementById('chartColumnY').value = columnY;
+    }
+
+    // Aktualizuj widoczność pól w zależności od typu wykresu
+    updateChartTypeOptions();
 
     // Wygeneruj wykres
     try {
         generateChart();
-        console.log('Wykres wygenerowany pomyślnie');
+        console.log(`Wykres wygenerowany pomyślnie: ${randomChartType} | X: ${columnX} | Y: ${columnY || 'brak'}`);
     } catch (error) {
         console.error('Błąd generowania wykresu:', error);
     }

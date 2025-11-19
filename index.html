@@ -326,46 +326,25 @@
                             <h5><i class="bi bi-funnel"></i> Filtruj wyniki</h5>
                         </div>
                         <div class="card-body">
-                            <!-- Dynamiczne filtry jak w Streamlit -->
-                            <div class="accordion mb-3" id="dynamicFiltersAccordion">
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#dynamicFiltersCollapse">
-                                            🎛️ Filtry dynamiczne (wybierz kolumny do filtrowania)
-                                        </button>
-                                    </h2>
-                                    <div id="dynamicFiltersCollapse" class="accordion-collapse collapse" data-bs-parent="#dynamicFiltersAccordion">
-                                        <div class="accordion-body">
-                                            <label class="form-label"><strong>Wybierz kolumny do filtrowania:</strong></label>
-                                            <select class="form-select mb-3" id="columnsToFilter" multiple size="5">
-                                                <!-- Opcje dodawane dynamicznie -->
-                                            </select>
-                                            <small class="text-muted">Trzymaj Ctrl/Cmd aby wybrać wiele kolumn</small>
-                                            <hr class="my-3">
-                                            <div id="dynamicFiltersContainer" class="row g-3">
-                                                <!-- Filtry dodawane dynamicznie -->
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Podstawowe filtry (zawsze widoczne) -->
-                            <div class="row g-3">
+                            <!-- Podstawowe filtry -->
+                            <div class="row g-3 mb-3">
                                 <div class="col-md-3">
                                     <label class="form-label">Marka</label>
-                                    <select class="form-select" id="filterBrand" multiple size="5">
+                                    <select class="form-select multi-select-enhanced" id="filterBrand" multiple size="5">
                                     </select>
+                                    <small class="text-muted">Kliknij aby zaznaczyć/odznaczyć</small>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Rodzaj pojazdu</label>
-                                    <select class="form-select" id="filterVehicleType" multiple size="5">
+                                    <select class="form-select multi-select-enhanced" id="filterVehicleType" multiple size="5">
                                     </select>
+                                    <small class="text-muted">Kliknij aby zaznaczyć/odznaczyć</small>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Rodzaj paliwa</label>
-                                    <select class="form-select" id="filterFuelType" multiple size="5">
+                                    <select class="form-select multi-select-enhanced" id="filterFuelType" multiple size="5">
                                     </select>
+                                    <small class="text-muted">Kliknij aby zaznaczyć/odznaczyć</small>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Rok produkcji</label>
@@ -392,6 +371,19 @@
                                     <small class="text-muted">Zakres: <span id="filterYearMin">1900</span> - <span id="filterYearMax">2030</span></small>
                                 </div>
                             </div>
+
+                            <!-- Dodatkowe kolumny do filtrowania -->
+                            <hr class="my-3">
+                            <label class="form-label"><strong>Dodatkowe kolumny do filtrowania:</strong></label>
+                            <select class="form-select mb-3 multi-select-enhanced" id="columnsToFilter" multiple size="5">
+                                <!-- Opcje dodawane dynamicznie -->
+                            </select>
+                            <small class="text-muted">Kliknij aby zaznaczyć/odznaczyć kolumny</small>
+
+                            <div id="dynamicFiltersContainer" class="row g-3 mt-3">
+                                <!-- Filtry dodawane dynamicznie -->
+                            </div>
+
                             <button class="btn btn-sm btn-secondary mt-3" id="resetFiltersBtn">
                                 <i class="bi bi-arrow-counterclockwise"></i> Resetuj wszystkie filtry
                             </button>

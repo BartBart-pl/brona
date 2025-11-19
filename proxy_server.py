@@ -41,9 +41,23 @@ class CORSRequestHandler(SimpleHTTPRequestHandler):
         """Przekaż zapytanie do API CEPiK i zwróć odpowiedź"""
         try:
             # Usuń prefix /api/ i stwórz pełny URL do API CEPiK
-            api_path = self.path[5:]  # Usuń '/api/'
+            print(f"DEBUG: self.path = '{self.path}'")
+
+            if self.path.startswith('/api/'):
+                api_path = self.path[5:]  # Usuń '/api/'
+            elif self.path.startswith('/api'):
+                api_path = self.path[4:]  # Usuń '/api'
+            else:
+                api_path = self.path
+
+            print(f"DEBUG: api_path = '{api_path}'")
+
+            # Dodaj / na początku jeśli brakuje
+            if not api_path.startswith('/'):
+                api_path = '/' + api_path
+
             api_url = f'https://api.cepik.gov.pl{api_path}'
-            
+
             print(f"Proxy: {self.path} -> {api_url}")
             
             # Stwórz SSL context z niższym poziomem bezpieczeństwa
@@ -85,8 +99,8 @@ class CORSRequestHandler(SimpleHTTPRequestHandler):
     
     def log_message(self, format, *args):
         """Logowanie requestów"""
-        # Tylko loguj proxy requests
-        if args[0].startswith('GET /api/'):
+        # Tylko loguj proxy requests (sprawdź czy pierwszy argument to string)
+        if args and isinstance(args[0], str) and 'GET /api/' in args[0]:
             print(f"{self.address_string()} - {format % args}")
 
 def run_server(port=8000):
