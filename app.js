@@ -535,12 +535,7 @@ async function searchVoivodeship(code, dateFrom, dateTo, filters, progressCallba
         params.set('page', page);
 
         try {
-            const response = await fetch(`${CONFIG.API_URL}/pojazdy?${params}`);
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
+            const response = await fetchWithTimeout(`${CONFIG.API_URL}/pojazdy?${params}`);
             const data = await response.json();
 
             if (data.data && data.data.length > 0) {
@@ -565,6 +560,206 @@ async function searchVoivodeship(code, dateFrom, dateTo, filters, progressCallba
 
     // Filtruj lokalnie po roku produkcji (API tego nie obsługuje)
     return filterByYear(vehicles, filters.yearFrom, filters.yearTo);
+}
+
+// ===========================
+// REQUEST QUEUE OPTIMIZATION
+// ===========================
+
+// Helper function: sleep
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Fetch z timeoutem i lepszą obsługą błędów
+async function fetchWithTimeout(url, options = {}, timeout = CONFIG.TIMEOUT) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            // Specjalna obsługa rate limit
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After');
+                const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 30000;
+                throw new Error(`HTTP 429: Rate limit exceeded. Retry after ${waitTime}ms`);
+            }
+
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        return response;
+
+    } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error.name === 'AbortError') {
+            throw new Error(`Request timeout after ${timeout}ms`);
+        }
+
+        throw error;
+    }
+}
+
+/**
+ * Tworzy kolejkę requestów z rolling processing
+ * - Utrzymuje stałą liczbę równoległych requestów
+ * - Wysyła nowy request natychmiast po zakończeniu poprzedniego
+ * - Retry logic z exponential backoff
+ * - Request deduplication
+ * - Real-time progress monitoring
+ */
+function createRequestQueue(maxConcurrent = 5, progressCallback = null) {
+    const queue = [];
+    const inProgress = new Set();
+    const completed = new Set();
+    const failed = new Map();
+    let activeCount = 0;
+    let totalTasks = 0;
+
+    function notifyProgress() {
+        if (progressCallback) {
+            progressCallback({
+                queued: queue.length,
+                active: activeCount,
+                completed: completed.size,
+                failed: failed.size,
+                total: totalTasks,
+                percentComplete: totalTasks > 0 ? Math.round((completed.size / totalTasks) * 100) : 0
+            });
+        }
+    }
+
+    async function processNext() {
+        // Jeśli brak zadań lub max concurrent osiągnięty
+        if (queue.length === 0 || activeCount >= maxConcurrent) {
+            return;
+        }
+
+        // Pobierz następne zadanie
+        const task = queue.shift();
+        if (!task) return;
+
+        // Sprawdź deduplikację
+        if (completed.has(task.id) || inProgress.has(task.id)) {
+            console.log(`⚠️ Skipping duplicate request: ${task.id}`);
+            processNext(); // Spróbuj kolejne
+            return;
+        }
+
+        activeCount++;
+        inProgress.add(task.id);
+        notifyProgress();
+
+        try {
+            console.log(`▶️ Starting request ${task.id} (${activeCount}/${maxConcurrent} active, ${queue.length} queued)`);
+
+            const result = await executeWithRetry(task.fn, task.maxRetries || 3, task.id);
+
+            completed.add(task.id);
+            inProgress.delete(task.id);
+            activeCount--;
+            notifyProgress();
+
+            console.log(`✅ Completed request ${task.id} (${activeCount}/${maxConcurrent} active, ${queue.length} queued)`);
+
+            if (task.onSuccess) {
+                task.onSuccess(result);
+            }
+
+        } catch (error) {
+            inProgress.delete(task.id);
+            activeCount--;
+            failed.set(task.id, error);
+            notifyProgress();
+
+            console.error(`❌ Failed request ${task.id}:`, error.message);
+
+            if (task.onError) {
+                task.onError(error);
+            }
+        }
+
+        // Natychmiast rozpocznij kolejne zadanie
+        processNext();
+    }
+
+    async function executeWithRetry(fn, maxRetries, taskId) {
+        let lastError;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                lastError = error;
+
+                // Nie retry dla 4xx errors (oprócz 429)
+                if (error.message.includes('HTTP 4') && !error.message.includes('429')) {
+                    console.error(`❌ Client error (no retry): ${error.message}`);
+                    throw error;
+                }
+
+                // Exponential backoff
+                if (attempt < maxRetries) {
+                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Max 10s
+                    console.warn(`⚠️ Retry ${attempt}/${maxRetries} for ${taskId} after ${delay}ms: ${error.message}`);
+                    await sleep(delay);
+                } else {
+                    console.error(`❌ Max retries reached for ${taskId}`);
+                }
+            }
+        }
+
+        throw lastError;
+    }
+
+    return {
+        add: (task) => {
+            queue.push(task);
+            totalTasks++;
+            notifyProgress();
+            processNext();
+        },
+
+        start: () => {
+            // Wystartuj max concurrent requestów
+            notifyProgress();
+            for (let i = 0; i < maxConcurrent; i++) {
+                processNext();
+            }
+        },
+
+        waitForAll: () => {
+            return new Promise((resolve) => {
+                const check = () => {
+                    if (activeCount === 0 && queue.length === 0) {
+                        resolve({
+                            completed: completed.size,
+                            failed: failed.size,
+                            errors: Array.from(failed.entries())
+                        });
+                    } else {
+                        setTimeout(check, 100);
+                    }
+                };
+                check();
+            });
+        },
+
+        getStats: () => ({
+            queued: queue.length,
+            active: activeCount,
+            completed: completed.size,
+            failed: failed.size
+        })
+    };
 }
 
 // Inicjalizacja statusów województw
@@ -614,43 +809,61 @@ function updateVoivodeshipStatusTable() {
     updateProgress(completed, total);
 }
 
-// Wyszukiwanie we wszystkich województwach równolegle z trackingiem
+// Wyszukiwanie we wszystkich województwach równolegle z trackingiem (OPTIMIZED)
 async function searchAllVoivodeships(dateFrom, dateTo, filters) {
     const codes = Object.keys(VOIVODESHIPS);
     const allVehicles = [];
     const seenIds = new Set();
 
-    updateLoadingMessage(`Odpytywanie ${codes.length} województw równolegle...`);
+    updateLoadingMessage(`Odpytywanie ${codes.length} województw równolegle (optimized)...`);
 
     // Inicjalizuj statusy
     initVoivodeshipStatuses();
 
-    // Wykonaj zapytania w partiach (max 5 jednocześnie)
-    for (let i = 0; i < codes.length; i += CONFIG.MAX_CONCURRENT_REQUESTS) {
-        const batch = codes.slice(i, i + CONFIG.MAX_CONCURRENT_REQUESTS);
+    // Utwórz request queue z rolling processing i progress monitoring
+    const queue = createRequestQueue(CONFIG.MAX_CONCURRENT_REQUESTS, (progress) => {
+        // Real-time progress update
+        updateProgress(progress.completed, progress.total);
+        console.log(`📊 Progress: ${progress.percentComplete}% (${progress.completed}/${progress.total}) | Active: ${progress.active} | Queued: ${progress.queued}`);
+    });
 
-        const promises = batch.map(code =>
-            searchVoivodeshipWithTracking(code, dateFrom, dateTo, filters)
-                .catch(error => {
-                    console.error(`Błąd dla ${VOIVODESHIPS[code]}:`, error);
-                    appState.voivodeshipStatuses[code].status = '❌ Błąd';
-                    appState.voivodeshipStatuses[code].error = error.message;
-                    updateVoivodeshipStatusTable();
-                    return [];
-                })
-        );
+    console.log(`🚀 Starting optimized request queue with ${CONFIG.MAX_CONCURRENT_REQUESTS} concurrent requests`);
 
-        const results = await Promise.all(promises);
-
-        // Dodaj wyniki z deduplicacją
-        results.flat().forEach(vehicle => {
-            const id = vehicle.id;
-            if (!seenIds.has(id)) {
-                seenIds.add(id);
-                allVehicles.push(vehicle);
+    // Dodaj wszystkie województwa do kolejki
+    codes.forEach(code => {
+        queue.add({
+            id: `voivodeship-${code}`,
+            maxRetries: 3,
+            fn: async () => {
+                return await searchVoivodeshipWithTracking(code, dateFrom, dateTo, filters);
+            },
+            onSuccess: (vehicles) => {
+                // Dodaj wyniki z deduplicacją
+                vehicles.forEach(vehicle => {
+                    const id = vehicle.id;
+                    if (!seenIds.has(id)) {
+                        seenIds.add(id);
+                        allVehicles.push(vehicle);
+                    }
+                });
+            },
+            onError: (error) => {
+                console.error(`❌ Failed to fetch ${VOIVODESHIPS[code]}:`, error);
+                appState.voivodeshipStatuses[code].status = '❌ Błąd';
+                appState.voivodeshipStatuses[code].error = error.message;
+                updateVoivodeshipStatusTable();
             }
         });
-    }
+    });
+
+    // Wystartuj przetwarzanie
+    queue.start();
+
+    // Czekaj na zakończenie wszystkich requestów
+    const stats = await queue.waitForAll();
+
+    console.log(`✅ Request queue completed:`, stats);
+    console.log(`📊 Total vehicles: ${allVehicles.length} (deduplicated from ${seenIds.size} unique IDs)`);
 
     // Ukryj tabelę statusów po zakończeniu
     setTimeout(() => {
