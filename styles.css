@@ -3,10 +3,43 @@
  * Stylizacja aplikacji klienckiej
  */
 
+/* CSS Variables for Dark Mode */
+:root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-tertiary: #e9ecef;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --border-color: #dee2e6;
+    --card-bg: #ffffff;
+    --card-shadow: rgba(0,0,0,0.08);
+    --navbar-bg: #0d6efd;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --table-hover: #f8f9fa;
+}
+
+[data-theme="dark"] {
+    --bg-primary: #212529;
+    --bg-secondary: #343a40;
+    --bg-tertiary: #495057;
+    --text-primary: #f8f9fa;
+    --text-secondary: #adb5bd;
+    --border-color: #495057;
+    --card-bg: #343a40;
+    --card-shadow: rgba(0,0,0,0.3);
+    --navbar-bg: #1a1d20;
+    --input-bg: #495057;
+    --input-border: #6c757d;
+    --table-hover: #495057;
+}
+
 /* Global */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Navbar */
@@ -35,15 +68,19 @@ body {
 
 /* Cards */
 .card {
-    border: none;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    border: 1px solid var(--border-color);
+    background-color: var(--card-bg);
+    box-shadow: 0 2px 4px var(--card-shadow);
     margin-bottom: 1.5rem;
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .card-header {
-    background-color: #fff;
+    background-color: var(--card-bg);
     border-bottom: 2px solid #0d6efd;
     font-weight: 600;
+    color: var(--text-primary);
 }
 
 /* Welcome Screen */
@@ -480,5 +517,38 @@ select[multiple] option:checked {
 
 .multi-select-enhanced option.drag-hover {
     background-color: #cfe2ff !important;
+}
+
+/* Dark Mode specific overrides */
+[data-theme="dark"] .navbar {
+    background-color: var(--navbar-bg) !important;
+}
+
+[data-theme="dark"] #vehiclesTable thead {
+    background-color: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .table-responsive {
+    background-color: var(--card-bg);
+}
+
+[data-theme="dark"] .badge.bg-light {
+    background-color: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .alert {
+    background-color: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Dark Mode Toggle Animation */
+#darkModeToggle {
+    transition: all 0.3s ease;
+}
+
+#darkModeToggle:hover {
+    transform: scale(1.1);
 }
 

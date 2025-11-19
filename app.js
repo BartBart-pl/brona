@@ -72,12 +72,296 @@ let appState = {
     availableColumns: []      // Dostępne kolumny
 };
 
+// ===========================
+// TOAST NOTIFICATIONS
+// ===========================
+
+function showToast(message, type = 'info', duration = 3000) {
+    const backgrounds = {
+        success: 'linear-gradient(to right, #00b09b, #96c93d)',
+        error: 'linear-gradient(to right, #ff5f6d, #ffc371)',
+        warning: 'linear-gradient(to right, #f7971e, #ffd200)',
+        info: 'linear-gradient(to right, #0077b6, #48cae4)'
+    };
+
+    Toastify({
+        text: message,
+        duration: duration,
+        gravity: 'top',
+        position: 'right',
+        stopOnFocus: true,
+        style: {
+            background: backgrounds[type] || backgrounds.info,
+            borderRadius: '8px',
+            padding: '12px 20px',
+            fontSize: '14px'
+        }
+    }).showToast();
+}
+
+// Convenience functions
+function showSuccess(message) {
+    showToast(message, 'success');
+}
+
+function showError(message) {
+    showToast(message, 'error', 5000);
+}
+
+function showWarning(message) {
+    showToast(message, 'warning', 4000);
+}
+
+function showInfo(message) {
+    showToast(message, 'info');
+}
+
+// ===========================
+// INDEXEDDB CACHE
+// ===========================
+
+let db = null;
+const DB_NAME = 'BronaCacheDB';
+const DB_VERSION = 1;
+const CACHE_STORE = 'apiCache';
+const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 godziny
+
+async function initIndexedDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onerror = () => {
+            console.error('❌ Błąd otwierania IndexedDB:', request.error);
+            resolve(null); // Kontynuuj bez cache
+        };
+
+        request.onsuccess = () => {
+            db = request.result;
+            console.log('✅ IndexedDB zainicjalizowane');
+            // Wyczyść stare cache przy starcie
+            cleanExpiredCache();
+            resolve(db);
+        };
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+
+            // Utwórz object store jeśli nie istnieje
+            if (!db.objectStoreNames.contains(CACHE_STORE)) {
+                const objectStore = db.createObjectStore(CACHE_STORE, { keyPath: 'cacheKey' });
+                objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+                console.log('✅ Utworzono object store:', CACHE_STORE);
+            }
+        };
+    });
+}
+
+async function getCachedData(cacheKey) {
+    if (!db) return null;
+
+    return new Promise((resolve) => {
+        const transaction = db.transaction([CACHE_STORE], 'readonly');
+        const objectStore = transaction.objectStore(CACHE_STORE);
+        const request = objectStore.get(cacheKey);
+
+        request.onsuccess = () => {
+            const result = request.result;
+
+            if (!result) {
+                resolve(null);
+                return;
+            }
+
+            // Sprawdź czy nie wygasło
+            const age = Date.now() - result.timestamp;
+            if (age > CACHE_EXPIRY_MS) {
+                console.log(`⏰ Cache wygasło dla: ${cacheKey}`);
+                deleteCachedData(cacheKey);
+                resolve(null);
+                return;
+            }
+
+            console.log(`✅ Cache hit: ${cacheKey} (wiek: ${(age / 1000 / 60).toFixed(1)}min)`);
+            resolve(result.data);
+        };
+
+        request.onerror = () => {
+            console.error('❌ Błąd odczytu cache:', request.error);
+            resolve(null);
+        };
+    });
+}
+
+async function setCachedData(cacheKey, data) {
+    if (!db) return false;
+
+    return new Promise((resolve) => {
+        const transaction = db.transaction([CACHE_STORE], 'readwrite');
+        const objectStore = transaction.objectStore(CACHE_STORE);
+
+        const record = {
+            cacheKey,
+            data,
+            timestamp: Date.now()
+        };
+
+        const request = objectStore.put(record);
+
+        request.onsuccess = () => {
+            console.log(`✅ Cache zapisane: ${cacheKey}`);
+            resolve(true);
+        };
+
+        request.onerror = () => {
+            console.error('❌ Błąd zapisu cache:', request.error);
+            resolve(false);
+        };
+    });
+}
+
+async function deleteCachedData(cacheKey) {
+    if (!db) return;
+
+    const transaction = db.transaction([CACHE_STORE], 'readwrite');
+    const objectStore = transaction.objectStore(CACHE_STORE);
+    objectStore.delete(cacheKey);
+}
+
+async function cleanExpiredCache() {
+    if (!db) return;
+
+    const transaction = db.transaction([CACHE_STORE], 'readwrite');
+    const objectStore = transaction.objectStore(CACHE_STORE);
+    const index = objectStore.index('timestamp');
+    const range = IDBKeyRange.upperBound(Date.now() - CACHE_EXPIRY_MS);
+
+    const request = index.openCursor(range);
+    let deleted = 0;
+
+    request.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor) {
+            cursor.delete();
+            deleted++;
+            cursor.continue();
+        } else if (deleted > 0) {
+            console.log(`🗑️ Usunięto ${deleted} wygasłych rekordów cache`);
+        }
+    };
+}
+
+function generateCacheKey(voivCode, dateFrom, dateTo, filters) {
+    const key = `${voivCode}_${dateFrom}_${dateTo}_${JSON.stringify(filters)}`;
+    return key;
+}
+
+// ===========================
+// DARK MODE
+// ===========================
+
+function initDarkMode() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    setTheme(savedTheme);
+
+    document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
+}
+
+function toggleDarkMode() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    showInfo(`🌓 Przełączono na tryb ${newTheme === 'dark' ? 'ciemny' : 'jasny'}`);
+}
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+
+    // Update icon
+    const icon = document.getElementById('darkModeIcon');
+    if (theme === 'dark') {
+        icon.className = 'bi bi-sun-fill';
+    } else {
+        icon.className = 'bi bi-moon-fill';
+    }
+}
+
+// ===========================
+// LOCALSTORAGE - FILTERS PERSISTENCE
+// ===========================
+
+function saveFiltersToStorage() {
+    const filters = {
+        brand: document.getElementById('brandFilter').value,
+        model: document.getElementById('modelFilter').value,
+        yearFrom: document.getElementById('yearFrom').value,
+        yearTo: document.getElementById('yearTo').value,
+        vehicleType: document.getElementById('vehicleTypeFilter').value,
+        fuelType: document.getElementById('fuelTypeFilter').value,
+        voivodeship: document.getElementById('voivodeshipSelect').value,
+        appendMode: document.getElementById('appendMode').checked
+    };
+
+    localStorage.setItem('savedFilters', JSON.stringify(filters));
+    console.log('✅ Filtry zapisane do localStorage');
+}
+
+function loadFiltersFromStorage() {
+    const saved = localStorage.getItem('savedFilters');
+    if (!saved) return false;
+
+    try {
+        const filters = JSON.parse(saved);
+
+        // Przywróć wartości (tylko jeśli elementy istnieją)
+        if (filters.brand && document.getElementById('brandFilter')) {
+            document.getElementById('brandFilter').value = filters.brand;
+        }
+        if (filters.model && document.getElementById('modelFilter')) {
+            document.getElementById('modelFilter').value = filters.model;
+        }
+        if (filters.yearFrom) document.getElementById('yearFrom').value = filters.yearFrom;
+        if (filters.yearTo) document.getElementById('yearTo').value = filters.yearTo;
+        if (filters.vehicleType && document.getElementById('vehicleTypeFilter')) {
+            document.getElementById('vehicleTypeFilter').value = filters.vehicleType;
+        }
+        if (filters.fuelType && document.getElementById('fuelTypeFilter')) {
+            document.getElementById('fuelTypeFilter').value = filters.fuelType;
+        }
+        if (filters.voivodeship) {
+            document.getElementById('voivodeshipSelect').value = filters.voivodeship;
+        }
+        if (filters.appendMode !== undefined) {
+            document.getElementById('appendMode').checked = filters.appendMode;
+        }
+
+        console.log('✅ Przywrócono filtry z localStorage');
+        return true;
+    } catch (e) {
+        console.error('❌ Błąd ładowania filtrów:', e);
+        return false;
+    }
+}
+
 // Inicjalizacja aplikacji
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Inicjalizacja aplikacji BRONA...');
-    
+
+    // Inicjalizuj Dark Mode
+    initDarkMode();
+
     // Załaduj województwa
     loadVoivodeships();
+
+    // Inicjalizuj IndexedDB cache
+    await initIndexedDB();
+
+    // Załaduj zapisane filtry po załadowaniu słowników
+    setTimeout(() => {
+        if (loadFiltersFromStorage()) {
+            showInfo('📋 Przywrócono ostatnie filtry');
+        }
+    }, 1000);
     
     // Załaduj słowniki
     await loadDictionaries();
@@ -416,12 +700,12 @@ async function handleSearch() {
     
     // Walidacja
     if (!dateFrom || !dateTo) {
-        alert('Wybierz zakres dat!');
+        showWarning('⚠️ Wybierz zakres dat!');
         return;
     }
-    
+
     if (new Date(dateFrom) > new Date(dateTo)) {
-        alert('Data "od" nie może być późniejsza niż data "do"!');
+        showError('❌ Data "od" nie może być późniejsza niż data "do"!');
         return;
     }
     
@@ -443,11 +727,14 @@ async function handleSearch() {
         filters
     };
     
+    // Zapisz filtry przed wyszukiwaniem
+    saveFiltersToStorage();
+
     showScreen('loading');
-    
+
     try {
         let newVehicles = [];
-        
+
         if (voivCode === 'ALL') {
             // Pobierz ze wszystkich województw
             newVehicles = await searchAllVoivodeships(dateFrom, dateTo, filters);
@@ -481,7 +768,7 @@ async function handleSearch() {
         }
         
         if (appState.allVehicles.length === 0) {
-            alert('Nie znaleziono żadnych pojazdów dla wybranych kryteriów.');
+            showWarning('⚠️ Nie znaleziono żadnych pojazdów dla wybranych kryteriów.');
             showScreen('welcome');
             return;
         }
@@ -497,6 +784,9 @@ async function handleSearch() {
         // Pokaż info
         updateSearchInfo();
 
+        // Success notification
+        showSuccess(`✅ Pobrano ${appState.allVehicles.length} pojazdów!`);
+
         // Automatycznie wygeneruj wykres po pobraniu danych
         // Zwiększony timeout aby UI było gotowe
         setTimeout(() => {
@@ -508,10 +798,10 @@ async function handleSearch() {
             });
             generateAutoChart();
         }, 1000);
-        
+
     } catch (error) {
         console.error('Błąd wyszukiwania:', error);
-        alert(`Błąd podczas wyszukiwania: ${error.message}`);
+        showError(`❌ Błąd podczas wyszukiwania: ${error.message}`);
         showScreen('welcome');
     }
 }
@@ -521,6 +811,24 @@ async function searchVoivodeship(code, dateFrom, dateTo, filters, progressCallba
     const dateFromAPI = formatDateAPI(dateFrom);
     const dateToAPI = formatDateAPI(dateTo);
 
+    // Sprawdź cache przed wykonaniem requestu
+    const cacheKey = generateCacheKey({
+        type: 'voivodeship',
+        code,
+        dateFrom: dateFromAPI,
+        dateTo: dateToAPI,
+        filters
+    });
+
+    const cachedData = await getCachedData(cacheKey);
+    if (cachedData) {
+        console.log(`✅ Cache HIT dla województwa ${code}`);
+        showInfo(`📦 Załadowano dane z cache dla ${VOIVODESHIPS[code]}`);
+        updateLoadingMessage(`Ładowanie z cache: ${VOIVODESHIPS[code]}...`);
+        return cachedData;
+    }
+
+    console.log(`❌ Cache MISS dla województwa ${code} - pobieranie z API`);
     updateLoadingMessage(`Wyszukiwanie w ${VOIVODESHIPS[code]}...`);
 
     const params = new URLSearchParams({
@@ -576,7 +884,13 @@ async function searchVoivodeship(code, dateFrom, dateTo, filters, progressCallba
     }
 
     // Filtruj lokalnie po roku produkcji (API tego nie obsługuje)
-    return filterByYear(vehicles, filters.yearFrom, filters.yearTo);
+    const filteredVehicles = filterByYear(vehicles, filters.yearFrom, filters.yearTo);
+
+    // Zapisz do cache przed zwróceniem
+    await setCachedData(cacheKey, filteredVehicles);
+    console.log(`💾 Zapisano do cache dla województwa ${code} (${filteredVehicles.length} pojazdów)`);
+
+    return filteredVehicles;
 }
 
 // ===========================
@@ -828,6 +1142,27 @@ function updateVoivodeshipStatusTable() {
 
 // Wyszukiwanie we wszystkich województwach równolegle z trackingiem (OPTIMIZED)
 async function searchAllVoivodeships(dateFrom, dateTo, filters) {
+    const dateFromAPI = formatDateAPI(dateFrom);
+    const dateToAPI = formatDateAPI(dateTo);
+
+    // Sprawdź cache dla zapytania "ALL"
+    const cacheKey = generateCacheKey({
+        type: 'all-voivodeships',
+        dateFrom: dateFromAPI,
+        dateTo: dateToAPI,
+        filters
+    });
+
+    const cachedData = await getCachedData(cacheKey);
+    if (cachedData) {
+        console.log(`✅ Cache HIT dla WSZYSTKICH województw`);
+        showInfo(`📦 Załadowano dane z cache dla wszystkich województw`);
+        updateLoadingMessage(`Ładowanie z cache: wszystkie województwa...`);
+        return cachedData;
+    }
+
+    console.log(`❌ Cache MISS dla WSZYSTKICH województw - pobieranie z API`);
+
     const codes = Object.keys(VOIVODESHIPS);
     const allVehicles = [];
     const seenIds = new Set();
@@ -881,6 +1216,10 @@ async function searchAllVoivodeships(dateFrom, dateTo, filters) {
 
     console.log(`✅ Request queue completed:`, stats);
     console.log(`📊 Total vehicles: ${allVehicles.length} (deduplicated from ${seenIds.size} unique IDs)`);
+
+    // Zapisz do cache przed zwróceniem
+    await setCachedData(cacheKey, allVehicles);
+    console.log(`💾 Zapisano do cache dla WSZYSTKICH województw (${allVehicles.length} pojazdów)`);
 
     // Ukryj tabelę statusów po zakończeniu
     setTimeout(() => {
@@ -1699,7 +2038,7 @@ function generateChart() {
             allVehicles: appState.allVehicles.length,
             filteredVehicles: appState.filteredVehicles.length
         });
-        alert('Brak danych do wizualizacji! Spróbuj zresetować filtry.');
+        showError('Brak danych do wizualizacji! Spróbuj zresetować filtry.');
         return;
     }
 
@@ -1717,7 +2056,7 @@ function generateChart() {
         }).filter(Boolean);
 
         if (values.length === 0) {
-            alert('Brak danych dla wybranej kolumny!');
+            showError('Brak danych dla wybranej kolumny!');
             return;
         }
 
@@ -1780,7 +2119,7 @@ function generateChart() {
         }).filter(Boolean);
 
         if (values.length === 0) {
-            alert('Brak danych dla wybranej kolumny!');
+            showError('Brak danych dla wybranej kolumny!');
             return;
         }
         const counts = {};
@@ -1802,7 +2141,7 @@ function generateChart() {
         const numericValues = values.map(v => parseFloat(v)).filter(v => !isNaN(v));
 
         if (numericValues.length === 0) {
-            alert('Kolumna nie zawiera wartości numerycznych!');
+            showError('Kolumna nie zawiera wartości numerycznych!');
             return;
         }
 
@@ -1851,7 +2190,7 @@ function generateChart() {
         })).filter(d => !isNaN(d.x) && !isNaN(d.y));
 
         if (dataPoints.length === 0) {
-            alert('Brak danych numerycznych dla wybranych kolumn!');
+            showError('Brak danych numerycznych dla wybranych kolumn!');
             return;
         }
 
@@ -1901,7 +2240,7 @@ function generateChart() {
         })).filter(d => d.x && !isNaN(d.y));
 
         if (dataPoints.length === 0) {
-            alert('Brak odpowiednich danych dla Box Plot!');
+            showError('Brak odpowiednich danych dla Box Plot!');
             return;
         }
 
@@ -1945,7 +2284,7 @@ function exportCSV() {
     const data = appState.filteredVehicles;
     
     if (data.length === 0) {
-        alert('Brak danych do eksportu!');
+        showError('Brak danych do eksportu!');
         return;
     }
     
@@ -1978,7 +2317,7 @@ function exportJSON() {
     const data = appState.filteredVehicles;
     
     if (data.length === 0) {
-        alert('Brak danych do eksportu!');
+        showError('Brak danych do eksportu!');
         return;
     }
     
