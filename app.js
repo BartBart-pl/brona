@@ -14,11 +14,10 @@ const CONFIG = {
     // API_URL: 'https://your-worker-name.your-subdomain.workers.dev',
 
     // Dla developmentu lokalnego (z proxy_server.py):
-    API_URL: '/api',
-    // API_URL: 'https://wispy-sunset-6278.bartlomiej-bartczak.workers.dev',
+    // API_URL: '/api',
 
-    // Dla produkcji (Cloudflare Worker - WKLEJ SWÓJ URL):
-    // API_URL: 'https://brona-proxy.workers.dev',
+    // Dla produkcji (GitHub Pages + Cloudflare Worker):
+    API_URL: 'https://wispy-sunset-6278.bartlomiej-bartczak.workers.dev',
 
     MAX_CONCURRENT_REQUESTS: 5,
     TIMEOUT: 30000,
