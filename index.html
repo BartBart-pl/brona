@@ -128,6 +128,14 @@
                                         <option value="">-- Wszystkie --</option>
                                     </select>
                                 </div>
+
+                                <!-- Pochodzenie pojazdu -->
+                                <div class="mb-3">
+                                    <label class="form-label small">Pochodzenie pojazdu</label>
+                                    <select class="form-select form-select-sm" id="originFilter">
+                                        <option value="">-- Wszystkie --</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -148,7 +156,7 @@
 
                 <!-- Przycisk czyszczenia -->
                 <button class="btn btn-outline-secondary w-100" id="clearBtn" style="display: none;">
-                    <i class="bi bi-trash"></i> Wyczyść dane
+                    <i class="bi bi-trash"></i> Wyczyść dane i cache
                 </button>
 
                 <hr class="my-3">
@@ -399,55 +407,6 @@
                         </div>
                     </div>
 
-                    <!-- Visualizations -->
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5><i class="bi bi-bar-chart"></i> Wizualizacje</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row mb-3">
-                                <div class="col-md-3">
-                                    <label class="form-label">Typ wykresu</label>
-                                    <select class="form-select" id="chartType">
-                                        <option value="bar">Słupkowy (Bar)</option>
-                                        <option value="pie">Kołowy (Pie)</option>
-                                        <option value="histogram">Histogram</option>
-                                        <option value="scatter">Scatter Plot</option>
-                                        <option value="box">Box Plot</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3" id="chartColumnXContainer">
-                                    <label class="form-label" id="chartColumnXLabel">Kolumna do analizy</label>
-                                    <select class="form-select" id="chartColumn">
-                                        <option value="marka">Marka</option>
-                                        <option value="rodzaj-pojazdu">Rodzaj pojazdu</option>
-                                        <option value="rodzaj-paliwa">Rodzaj paliwa</option>
-                                        <option value="rok-produkcji">Rok produkcji</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3" id="chartColumnYContainer" style="display: none;">
-                                    <label class="form-label">Kolumna Y</label>
-                                    <select class="form-select" id="chartColumnY">
-                                        <option value="rok-produkcji">Rok produkcji</option>
-                                        <option value="pojemnosc-skokowa-silnika">Pojemność silnika</option>
-                                        <option value="masa-wlasna">Masa własna</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3" id="chartTopNContainer">
-                                    <label class="form-label">Top N (dla bar/pie)</label>
-                                    <input type="number" class="form-control" id="chartTopN" value="15" min="5" max="50">
-                                </div>
-                            </div>
-                            <div class="alert alert-success alert-sm">
-                                <small><i class="bi bi-check-circle"></i> Wykres generuje się automatycznie po załadowaniu danych. Możesz zmienić ustawienia i wygenerować ponownie.</small>
-                            </div>
-                            <button class="btn btn-secondary" id="generateChartBtn">
-                                <i class="bi bi-arrow-clockwise"></i> Regeneruj wykres
-                            </button>
-                            <div id="chartContainer" class="mt-4"></div>
-                        </div>
-                    </div>
-
                     <!-- Data table -->
                     <div class="card mb-4">
                         <div class="card-header">
@@ -510,6 +469,77 @@
                                     <ul class="pagination pagination-sm mb-0" id="pagination">
                                     </ul>
                                 </nav>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visualizations -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Wizualizacje</h5>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary" id="downloadChartBtn" title="Pobierz wykres jako PNG">
+                                    <i class="bi bi-download"></i> Pobierz PNG
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" id="fullscreenChartBtn" title="Tryb pełnoekranowy">
+                                    <i class="bi bi-arrows-fullscreen"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">Typ wykresu</label>
+                                    <select class="form-select" id="chartType">
+                                        <option value="bar">Słupkowy (Bar)</option>
+                                        <option value="pie">Kołowy (Pie)</option>
+                                        <option value="histogram">Histogram</option>
+                                        <option value="scatter">Scatter Plot</option>
+                                        <option value="box">Box Plot</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3" id="chartColumnXContainer">
+                                    <label class="form-label" id="chartColumnXLabel">Kolumna do analizy</label>
+                                    <select class="form-select" id="chartColumn">
+                                        <option value="marka">Marka</option>
+                                        <option value="rodzaj-pojazdu">Rodzaj pojazdu</option>
+                                        <option value="rodzaj-paliwa">Rodzaj paliwa</option>
+                                        <option value="rok-produkcji">Rok produkcji</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3" id="chartColumnYContainer" style="display: none;">
+                                    <label class="form-label">Kolumna Y</label>
+                                    <select class="form-select" id="chartColumnY">
+                                        <option value="rok-produkcji">Rok produkcji</option>
+                                        <option value="pojemnosc-skokowa-silnika">Pojemność silnika</option>
+                                        <option value="masa-wlasna">Masa własna</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3" id="chartTopNContainer">
+                                    <label class="form-label">Top N (dla bar/pie)</label>
+                                    <input type="number" class="form-control" id="chartTopN" value="15" min="5" max="50">
+                                </div>
+                            </div>
+                            <div class="alert alert-info alert-sm mb-3">
+                                <small><i class="bi bi-info-circle"></i> <strong>Wskazówki:</strong> Wykres generuje się automatycznie. Możesz zmienić ustawienia i kliknąć "Regeneruj" lub pobrać wykres jako obraz PNG.</small>
+                            </div>
+                            <div class="d-flex gap-2 mb-3">
+                                <button class="btn btn-secondary" id="generateChartBtn">
+                                    <i class="bi bi-arrow-clockwise"></i> Regeneruj wykres
+                                </button>
+                            </div>
+                            <div id="chartContainer" class="mt-4"></div>
+
+                            <!-- Statystyki pod wykresem -->
+                            <div id="chartStats" class="mt-4" style="display: none;">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="bi bi-calculator"></i> Statystyki dla wybranej kolumny</h6>
+                                        <div class="row" id="chartStatsContent">
+                                            <!-- Dynamicznie generowane statystyki -->
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

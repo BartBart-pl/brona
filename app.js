@@ -250,9 +250,53 @@ async function cleanExpiredCache() {
     };
 }
 
-function generateCacheKey(voivCode, dateFrom, dateTo, filters) {
-    const key = `${voivCode}_${dateFrom}_${dateTo}_${JSON.stringify(filters)}`;
-    return key;
+async function clearAllCache() {
+    if (!db) return 0;
+
+    return new Promise((resolve) => {
+        const transaction = db.transaction([CACHE_STORE], 'readwrite');
+        const objectStore = transaction.objectStore(CACHE_STORE);
+        const request = objectStore.clear();
+
+        request.onsuccess = () => {
+            console.log('🗑️ Wyczyszczono cały cache IndexedDB');
+            resolve(true);
+        };
+
+        request.onerror = () => {
+            console.error('❌ Błąd czyszczenia cache:', request.error);
+            resolve(false);
+        };
+    });
+}
+
+function generateCacheKey(params) {
+    // Pomocnicza funkcja do sortowania kluczy w obiekcie
+    const sortedStringify = (obj) => {
+        if (!obj || typeof obj !== 'object') return JSON.stringify(obj);
+        const sortedKeys = Object.keys(obj).sort();
+        const sortedObj = {};
+        sortedKeys.forEach(key => {
+            sortedObj[key] = obj[key];
+        });
+        return JSON.stringify(sortedObj);
+    };
+
+    // Obsługa starego formatu (4 parametry) i nowego (obiekt)
+    if (typeof params === 'object' && params !== null && !Array.isArray(params)) {
+        // Nowy format - obiekt z parametrami
+        const { type, code, dateFrom, dateTo, filters } = params;
+        const key = `${type || 'single'}_${code || 'unknown'}_${dateFrom}_${dateTo}_${sortedStringify(filters || {})}`;
+        return key;
+    } else {
+        // Stary format - 4 parametry (backward compatibility)
+        const voivCode = arguments[0];
+        const dateFrom = arguments[1];
+        const dateTo = arguments[2];
+        const filters = arguments[3];
+        const key = `${voivCode}_${dateFrom}_${dateTo}_${sortedStringify(filters)}`;
+        return key;
+    }
 }
 
 // ===========================
@@ -298,6 +342,7 @@ function saveFiltersToStorage() {
         yearTo: document.getElementById('yearTo').value,
         vehicleType: document.getElementById('vehicleTypeFilter').value,
         fuelType: document.getElementById('fuelTypeFilter').value,
+        origin: document.getElementById('originFilter').value,
         voivodeship: document.getElementById('voivodeshipSelect').value,
         appendMode: document.getElementById('appendMode').checked
     };
@@ -327,6 +372,9 @@ function loadFiltersFromStorage() {
         }
         if (filters.fuelType && document.getElementById('fuelTypeFilter')) {
             document.getElementById('fuelTypeFilter').value = filters.fuelType;
+        }
+        if (filters.origin && document.getElementById('originFilter')) {
+            document.getElementById('originFilter').value = filters.origin;
         }
         if (filters.voivodeship) {
             document.getElementById('voivodeshipSelect').value = filters.voivodeship;
@@ -407,7 +455,7 @@ async function loadDictionaries() {
 
         if (data.data && Array.isArray(data.data)) {
             // Pobierz wartości dla interesujących nas słowników
-            const dictionariesToLoad = ['marka', 'rodzaj-pojazdu', 'rodzaj-paliwa'];
+            const dictionariesToLoad = ['marka', 'rodzaj-pojazdu', 'rodzaj-paliwa', 'pochodzenie-pojazdu'];
 
             for (const dictItem of data.data) {
                 const dictId = dictItem.id;
@@ -469,8 +517,9 @@ function populateFilterSelect(dictId, values) {
     if (dictId === 'marka') selectId = 'brandFilter';
     else if (dictId === 'rodzaj-pojazdu') selectId = 'vehicleTypeFilter';
     else if (dictId === 'rodzaj-paliwa') selectId = 'fuelTypeFilter';
+    else if (dictId === 'pochodzenie-pojazdu') selectId = 'originFilter';
     else return;
-    
+
     const select = document.getElementById(selectId);
     values.forEach(value => {
         const option = document.createElement('option');
@@ -525,74 +574,45 @@ function setupEnhancedMultiSelect() {
     const multiSelects = document.querySelectorAll('.multi-select-enhanced');
 
     multiSelects.forEach(select => {
-        let isDragging = false;
-        let lastSelectedIndex = -1;
-        let dragStartSelected = false;
+        // Usuń stare listenery jeśli istnieją (poprzez klonowanie elementu)
+        if (select.dataset.enhancedInitialized === 'true') {
+            return; // Już zainicjalizowany, pomiń
+        }
+        select.dataset.enhancedInitialized = 'true';
 
-        // Zapobiegaj domyślnemu zachowaniu multi-select
+        let lastSelectedIndex = -1;
+
+        // Shift + klik = zaznacz zakres (enhancement)
         select.addEventListener('mousedown', (e) => {
-            if (e.target.tagName === 'OPTION') {
-                e.preventDefault();
+            if (e.target.tagName === 'OPTION' && e.shiftKey && lastSelectedIndex !== -1) {
+                e.preventDefault(); // Tylko dla range selection blokujemy default
 
                 const option = e.target;
                 const index = Array.from(select.options).indexOf(option);
+                const start = Math.min(lastSelectedIndex, index);
+                const end = Math.max(lastSelectedIndex, index);
 
-                // Shift + klik = zaznacz zakres
-                if (e.shiftKey && lastSelectedIndex !== -1) {
-                    const start = Math.min(lastSelectedIndex, index);
-                    const end = Math.max(lastSelectedIndex, index);
-
-                    for (let i = start; i <= end; i++) {
-                        select.options[i].selected = true;
-                    }
-
-                    // Trigger change event
-                    select.dispatchEvent(new Event('change'));
-                } else {
-                    // Normalny klik = toggle
-                    option.selected = !option.selected;
-                    lastSelectedIndex = index;
-
-                    // Rozpocznij drag
-                    isDragging = true;
-                    dragStartSelected = option.selected;
-                    select.classList.add('dragging');
-
-                    // Trigger change event
-                    select.dispatchEvent(new Event('change'));
+                for (let i = start; i <= end; i++) {
+                    select.options[i].selected = true;
                 }
-            }
-        });
-
-        // Podczas przeciągania
-        select.addEventListener('mouseover', (e) => {
-            if (isDragging && e.target.tagName === 'OPTION') {
-                e.target.selected = dragStartSelected;
-                e.target.classList.add('drag-hover');
 
                 // Trigger change event
-                select.dispatchEvent(new Event('change'));
+                setTimeout(() => {
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }, 10);
             }
         });
 
-        select.addEventListener('mouseout', (e) => {
-            if (e.target.tagName === 'OPTION') {
-                e.target.classList.remove('drag-hover');
+        // Zapamiętaj ostatnio klikniętą opcję (dla Shift+click)
+        select.addEventListener('change', () => {
+            const selectedOptions = Array.from(select.selectedOptions);
+            if (selectedOptions.length > 0) {
+                const lastOption = selectedOptions[selectedOptions.length - 1];
+                lastSelectedIndex = Array.from(select.options).indexOf(lastOption);
             }
-        });
 
-        // Zakończ drag
-        select.addEventListener('mouseup', () => {
-            isDragging = false;
-            select.classList.remove('dragging');
-        });
-
-        // Globalne mouseup (gdy mysz wychodzi poza select)
-        document.addEventListener('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                select.classList.remove('dragging');
-            }
+            // Log dla debugowania
+            console.log(`🔄 Multi-select changed: ${select.id}, wybrano: ${selectedOptions.length} opcji`);
         });
     });
 }
@@ -625,10 +645,15 @@ function setupEventListeners() {
     document.getElementById('searchBtn').addEventListener('click', handleSearch);
 
     // Przycisk czyszczenia
-    document.getElementById('clearBtn').addEventListener('click', () => {
+    document.getElementById('clearBtn').addEventListener('click', async () => {
         appState.allVehicles = [];
         appState.filteredVehicles = [];
         appState.batchCounter = 0;
+
+        // Wyczyść cache IndexedDB
+        await clearAllCache();
+        showSuccess('✅ Wyczyszczono dane i cache');
+
         showScreen('welcome');
         document.getElementById('clearBtn').style.display = 'none';
     });
@@ -682,6 +707,8 @@ function setupEventListeners() {
 
     // Wykresy
     document.getElementById('generateChartBtn').addEventListener('click', generateChart);
+    document.getElementById('downloadChartBtn').addEventListener('click', downloadChart);
+    document.getElementById('fullscreenChartBtn').addEventListener('click', toggleFullscreenChart);
 
     // Eksport
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
@@ -709,14 +736,15 @@ async function handleSearch() {
         return;
     }
     
-    // Pobierz filtry
+    // Pobierz filtry z normalizacją stringów
     const filters = {
-        brand: document.getElementById('brandFilter').value,
-        model: document.getElementById('modelFilter').value,
+        brand: (document.getElementById('brandFilter').value || '').trim(),
+        model: (document.getElementById('modelFilter').value || '').trim(),
         yearFrom: parseInt(document.getElementById('yearFrom').value) || null,
         yearTo: parseInt(document.getElementById('yearTo').value) || null,
-        vehicleType: document.getElementById('vehicleTypeFilter').value,
-        fuelType: document.getElementById('fuelTypeFilter').value
+        vehicleType: (document.getElementById('vehicleTypeFilter').value || '').trim(),
+        fuelType: (document.getElementById('fuelTypeFilter').value || '').trim(),
+        origin: (document.getElementById('originFilter').value || '').trim()
     };
     
     // Zapisz parametry wyszukiwania
@@ -749,12 +777,11 @@ async function handleSearch() {
             v._batch_id = appState.batchCounter;
 
             // Mapuj kod województwa na nazwę
-            if (v.attributes && v.attributes['wojewodztwo']) {
-                const voivCode = v.attributes['wojewodztwo'];
+            // API zwraca pole 'wojewodztwo-kod', nie 'wojewodztwo'
+            if (v.attributes && v.attributes['wojewodztwo-kod']) {
+                const voivCode = v.attributes['wojewodztwo-kod'];
                 if (VOIVODESHIPS[voivCode]) {
-                    // Zachowaj oryginalny kod jako 'wojewodztwo-kod'
-                    v.attributes['wojewodztwo-kod'] = voivCode;
-                    // Zamień wartość 'wojewodztwo' na słowną nazwę
+                    // Dodaj słowną nazwę województwa jako nowe pole
                     v.attributes['wojewodztwo'] = VOIVODESHIPS[voivCode];
                 }
             }
@@ -762,7 +789,13 @@ async function handleSearch() {
 
         // Append lub replace
         if (appendMode && appState.allVehicles.length > 0) {
-            appState.allVehicles = [...appState.allVehicles, ...newVehicles];
+            // Deduplikacja - usuń pojazdy które już istnieją (po id)
+            const existingIds = new Set(appState.allVehicles.map(v => v.id));
+            const uniqueNewVehicles = newVehicles.filter(v => !existingIds.has(v.id));
+
+            console.log(`📊 Deduplikacja: ${newVehicles.length} nowych → ${uniqueNewVehicles.length} unikalnych`);
+
+            appState.allVehicles = [...appState.allVehicles, ...uniqueNewVehicles];
         } else {
             appState.allVehicles = newVehicles;
         }
@@ -844,6 +877,7 @@ async function searchVoivodeship(code, dateFrom, dateTo, filters, progressCallba
     if (filters.model) params.append('filter[model]', filters.model.toUpperCase());
     if (filters.vehicleType) params.append('filter[rodzaj-pojazdu]', filters.vehicleType.toUpperCase());
     if (filters.fuelType) params.append('filter[rodzaj-paliwa]', filters.fuelType.toUpperCase());
+    if (filters.origin) params.append('filter[pochodzenie-pojazdu]', filters.origin.toUpperCase());
 
     const vehicles = [];
     let page = 1;
@@ -1448,23 +1482,46 @@ function resetFilters() {
 
 // Aktualizacja dynamicznych filtrów
 function updateDynamicFilters() {
-    const select = document.getElementById('columnsToFilter');
-    const container = document.getElementById('dynamicFiltersContainer');
-    const selectedColumns = Array.from(select.selectedOptions).map(o => o.value);
+    // Małe opóźnienie żeby DOM się zaktualizował po kliknięciu
+    setTimeout(() => {
+        const select = document.getElementById('columnsToFilter');
+        const container = document.getElementById('dynamicFiltersContainer');
 
-    console.log('🔍 updateDynamicFilters wywołane, wybrano kolumny:', selectedColumns);
+        console.log('🔍 updateDynamicFilters wywołane');
+        console.log('  - Select element:', select);
+        console.log('  - Container element:', container);
+        console.log('  - appState.allVehicles.length:', appState.allVehicles?.length || 0);
 
-    // Wyczyść dynamiczne filtry
-    appState.dynamicFilters = {};
-    container.innerHTML = '';
+        if (!select || !container) {
+            console.error('❌ Brak elementów HTML dla dynamicznych filtrów!');
+            return;
+        }
 
-    if (selectedColumns.length === 0) {
-        console.log('ℹ️ Brak wybranych kolumn, czyszczenie filtrów');
-        applyFilters();
-        return;
-    }
+        const selectedColumns = Array.from(select.selectedOptions).map(o => o.value);
+        console.log('  - Wybrane kolumny:', selectedColumns);
 
-    console.log(`📋 Generowanie ${selectedColumns.length} dynamicznych filtrów...`);
+        // Wyczyść dynamiczne filtry
+        appState.dynamicFilters = {};
+        container.innerHTML = '';
+
+        if (selectedColumns.length === 0) {
+            console.log('ℹ️ Brak wybranych kolumn, czyszczenie filtrów');
+            applyFilters();
+            return;
+        }
+
+        if (!appState.allVehicles || appState.allVehicles.length === 0) {
+            console.warn('⚠️ Brak danych w appState.allVehicles! Nie można wygenerować filtrów.');
+            showWarning('⚠️ Najpierw pobierz dane, potem wybierz kolumny do filtrowania.');
+            return;
+        }
+
+        console.log(`📋 Generowanie ${selectedColumns.length} dynamicznych filtrów...`);
+        generateDynamicFilterElements(selectedColumns, container);
+    }, 10);
+}
+
+function generateDynamicFilterElements(selectedColumns, container) {
 
     // Dla każdej wybranej kolumny stwórz odpowiedni filtr
     selectedColumns.forEach((column, idx) => {
@@ -1543,15 +1600,20 @@ function updateDynamicFilters() {
 
             // Event listener
             setTimeout(() => {
-                document.getElementById(`dynamicFilter_${idx}`).addEventListener('change', (e) => {
-                    const selected = Array.from(e.target.selectedOptions).map(o => o.value);
-                    if (selected.length > 0) {
-                        appState.dynamicFilters[column] = selected;
-                    } else {
-                        delete appState.dynamicFilters[column];
-                    }
-                    applyFilters();
-                });
+                const element = document.getElementById(`dynamicFilter_${idx}`);
+                if (element) {
+                    element.addEventListener('change', (e) => {
+                        const selected = Array.from(e.target.selectedOptions).map(o => o.value);
+                        if (selected.length > 0) {
+                            appState.dynamicFilters[column] = selected;
+                        } else {
+                            delete appState.dynamicFilters[column];
+                        }
+                        applyFilters();
+                    });
+                } else {
+                    console.warn(`⚠️ Element dynamicFilter_${idx} nie istnieje (prawdopodobnie został usunięty)`);
+                }
             }, 10);
         }
     });
@@ -1646,6 +1708,9 @@ function updateFilterOptions() {
     // Inicjalizuj opcje dla dynamicznych filtrów
     const columnsToFilterSelect = document.getElementById('columnsToFilter');
     columnsToFilterSelect.innerHTML = '';
+    // Reset enhanced flag po wyczyszczeniu
+    columnsToFilterSelect.dataset.enhancedInitialized = 'false';
+
     const excludedColumns = ['id', '_batch_id']; // Wyklucz te kolumny
     const sortedColumns = Array.from(allColumns).filter(c => !excludedColumns.includes(c)).sort();
     sortedColumns.forEach(col => {
@@ -1658,6 +1723,8 @@ function updateFilterOptions() {
     // Inicjalizuj opcje dla wyboru kolumn do wyświetlenia
     const columnsToDisplaySelect = document.getElementById('columnsToDisplay');
     columnsToDisplaySelect.innerHTML = '';
+    // Reset enhanced flag po wyczyszczeniu
+    columnsToDisplaySelect.dataset.enhancedInitialized = 'false';
 
     // Domyślne kolumny
     const defaultColumns = ['marka', 'model', 'rok-produkcji', 'rodzaj-pojazdu', 'rodzaj-paliwa', 'pojemnosc-skokowa-silnika', 'masa-wlasna'];
@@ -2276,6 +2343,144 @@ function generateChart() {
             };
             Plotly.newPlot(container, [trace], layout);
         }
+    }
+
+    // Generuj statystyki po utworzeniu wykresu
+    generateChartStatistics(column, data);
+}
+
+// Generowanie statystyk dla wykresu
+function generateChartStatistics(column, data) {
+    const statsContainer = document.getElementById('chartStats');
+    const statsContent = document.getElementById('chartStatsContent');
+
+    // Pobierz wartości z kolumny
+    const values = data.map(v => v.attributes?.[column]).filter(v => v != null);
+
+    if (values.length === 0) {
+        statsContainer.style.display = 'none';
+        return;
+    }
+
+    // Sprawdź czy kolumna jest numeryczna
+    const numericValues = values.map(v => parseFloat(v)).filter(v => !isNaN(v));
+
+    if (numericValues.length > 0) {
+        // Statystyki dla wartości numerycznych
+        const sorted = [...numericValues].sort((a, b) => a - b);
+        const sum = sorted.reduce((a, b) => a + b, 0);
+        const mean = sum / sorted.length;
+        const min = sorted[0];
+        const max = sorted[sorted.length - 1];
+        const median = sorted.length % 2 === 0
+            ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+            : sorted[Math.floor(sorted.length / 2)];
+
+        // Odchylenie standardowe
+        const variance = sorted.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / sorted.length;
+        const stdDev = Math.sqrt(variance);
+
+        statsContent.innerHTML = `
+            <div class="col-md-2">
+                <div class="text-center">
+                    <small class="text-muted">Liczba</small>
+                    <div class="fs-5 fw-bold">${sorted.length}</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <small class="text-muted">Średnia</small>
+                    <div class="fs-5 fw-bold">${mean.toFixed(2)}</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <small class="text-muted">Mediana</small>
+                    <div class="fs-5 fw-bold">${median.toFixed(2)}</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <small class="text-muted">Min</small>
+                    <div class="fs-5 fw-bold">${min.toFixed(2)}</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <small class="text-muted">Max</small>
+                    <div class="fs-5 fw-bold">${max.toFixed(2)}</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <small class="text-muted">Odch. std.</small>
+                    <div class="fs-5 fw-bold">${stdDev.toFixed(2)}</div>
+                </div>
+            </div>
+        `;
+        statsContainer.style.display = 'block';
+    } else {
+        // Statystyki dla wartości kategorycznych
+        const uniqueValues = [...new Set(values)];
+        const counts = {};
+        values.forEach(v => counts[v] = (counts[v] || 0) + 1);
+        const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+
+        statsContent.innerHTML = `
+            <div class="col-md-4">
+                <div class="text-center">
+                    <small class="text-muted">Liczba wartości</small>
+                    <div class="fs-5 fw-bold">${values.length}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <small class="text-muted">Unikalnych</small>
+                    <div class="fs-5 fw-bold">${uniqueValues.length}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center">
+                    <small class="text-muted">Najczęstsza</small>
+                    <div class="fs-6 fw-bold text-truncate" title="${mostCommon[0]}">${mostCommon[0]} (${mostCommon[1]}x)</div>
+                </div>
+            </div>
+        `;
+        statsContainer.style.display = 'block';
+    }
+}
+
+// Pobieranie wykresu jako PNG
+function downloadChart() {
+    const container = document.getElementById('chartContainer');
+
+    if (!container.children.length) {
+        showWarning('⚠️ Najpierw wygeneruj wykres!');
+        return;
+    }
+
+    Plotly.downloadImage(container, {
+        format: 'png',
+        width: 1200,
+        height: 800,
+        filename: `cepik_chart_${new Date().toISOString().split('T')[0]}`
+    });
+
+    showSuccess('📥 Pobieranie wykresu...');
+}
+
+// Tryb pełnoekranowy dla wykresu
+function toggleFullscreenChart() {
+    const chartCard = document.querySelector('#chartContainer').closest('.card');
+
+    if (!document.fullscreenElement) {
+        chartCard.requestFullscreen().then(() => {
+            showInfo('🖥️ Tryb pełnoekranowy. Naciśnij ESC aby wyjść.');
+        }).catch(err => {
+            showError(`❌ Nie można przełączyć na pełny ekran: ${err.message}`);
+        });
+    } else {
+        document.exitFullscreen();
     }
 }
 
