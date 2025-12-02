@@ -86,12 +86,25 @@
                         </h2>
                         <div id="filtersCollapse" class="accordion-collapse collapse show" data-bs-parent="#filtersAccordion">
                             <div class="accordion-body">
-                                <!-- Marka -->
+                                <!-- Marka - Autocomplete z chipami -->
                                 <div class="mb-3">
-                                    <label class="form-label small">Marka pojazdu</label>
-                                    <select class="form-select form-select-sm" id="brandFilter">
-                                        <option value="">-- Wszystkie --</option>
-                                    </select>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label small mb-0"><strong>Filtr marki</strong></label>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearBrandsBtn" style="font-size: 0.75rem; padding: 0.125rem 0.5rem;">
+                                            <i class="bi bi-x-circle"></i> Wyczyść
+                                        </button>
+                                    </div>
+                                    <div class="brand-search-section">
+                                        <div class="position-relative">
+                                            <input type="text"
+                                                   class="form-control form-control-sm"
+                                                   id="brandSearchInputSidebar"
+                                                   placeholder="Wpisz markę (min 2 znaki)..."
+                                                   autocomplete="off">
+                                            <div id="brandAutocompleteSidebar" class="autocomplete-dropdown" style="display: none;"></div>
+                                        </div>
+                                        <div id="selectedBrandsChipsSidebar" class="chips-container mt-2"></div>
+                                    </div>
                                 </div>
 
                                 <!-- Model -->

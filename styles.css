@@ -552,3 +552,127 @@ select[multiple] option:checked {
     transform: scale(1.1);
 }
 
+/* Brand Selector - Popular Brands + Autocomplete */
+.popular-brands-section {
+    padding: 0.75rem;
+    background-color: var(--bg-secondary);
+    border-radius: 0.375rem;
+    border: 1px solid var(--border-color);
+}
+
+.popular-brands-section .form-check {
+    margin-bottom: 0.25rem;
+}
+
+.popular-brands-section .form-check-label {
+    font-size: 0.875rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.popular-brands-section .form-check-input {
+    cursor: pointer;
+}
+
+.brand-search-section {
+    padding: 0.75rem;
+    background-color: var(--bg-secondary);
+    border-radius: 0.375rem;
+    border: 1px solid var(--border-color);
+}
+
+/* Autocomplete Dropdown */
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-top: none;
+    border-radius: 0 0 0.375rem 0.375rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-top: -1px;
+}
+
+.autocomplete-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    transition: background-color 0.15s ease;
+}
+
+.autocomplete-item:hover {
+    background-color: #e7f1ff;
+    color: #0d6efd;
+}
+
+.autocomplete-item.active {
+    background-color: #0d6efd;
+    color: white;
+}
+
+/* Chips Container */
+.chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    min-height: 32px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background-color: #0d6efd;
+    color: white;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.chip:hover {
+    background-color: #0b5ed7;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.chip-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.chip-remove:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Dark mode overrides for brand selector */
+[data-theme="dark"] .popular-brands-section,
+[data-theme="dark"] .brand-search-section {
+    background-color: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .autocomplete-dropdown {
+    background-color: var(--input-bg);
+}
+
+[data-theme="dark"] .autocomplete-item:hover {
+    background-color: var(--bg-tertiary);
+    color: #48cae4;
+}
+

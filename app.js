@@ -69,7 +69,9 @@ let appState = {
     voivodeshipStatuses: {},  // Status pobierania z województw
     dynamicFilters: {},       // Dynamiczne filtry
     selectedColumns: [],      // Wybrane kolumny do wyświetlenia
-    availableColumns: []      // Dostępne kolumny
+    availableColumns: [],     // Dostępne kolumny
+    selectedBrands: new Set(), // Wybrane marki (z autocomplete + chipy)
+    allBrands: []             // Wszystkie marki dostępne (dla autocomplete)
 };
 
 // ===========================
@@ -336,7 +338,7 @@ function setTheme(theme) {
 
 function saveFiltersToStorage() {
     const filters = {
-        brand: document.getElementById('brandFilter').value,
+        brands: getSelectedBrands(), // NOWY: Tablica wybranych marek z sidebara
         model: document.getElementById('modelFilter').value,
         yearFrom: document.getElementById('yearFrom').value,
         yearTo: document.getElementById('yearTo').value,
@@ -357,11 +359,28 @@ function loadFiltersFromStorage() {
 
     try {
         const filters = JSON.parse(saved);
+        console.log(`💾 Ładowanie filtrów z localStorage:`, filters);
 
-        // Przywróć wartości (tylko jeśli elementy istnieją)
-        if (filters.brand && document.getElementById('brandFilter')) {
-            document.getElementById('brandFilter').value = filters.brand;
+        // WAŻNE: Wyczyść poprzednie marki przed przywróceniem
+        console.log(`🧹 Czyszczenie poprzednich marek przed przywróceniem...`);
+        appState.selectedBrands.clear();
+
+        // Przywróć marki do nowego UI (tylko chipy, bez checkboxów)
+        if (filters.brands && Array.isArray(filters.brands)) {
+            console.log(`  - Przywracanie ${filters.brands.length} marek:`, filters.brands);
+            filters.brands.forEach(brand => {
+                // Dodaj do state
+                appState.selectedBrands.add(brand);
+                // Dodaj chip
+                addBrandChip(brand);
+            });
         }
+        // Fallback dla starego formatu (single brand)
+        else if (filters.brand) {
+            appState.selectedBrands.add(filters.brand);
+            addBrandChip(filters.brand);
+        }
+
         if (filters.model && document.getElementById('modelFilter')) {
             document.getElementById('modelFilter').value = filters.model;
         }
@@ -419,7 +438,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Event listenery
     setupEventListeners();
-    
+
+    // Inicjalizuj selektor marek w sidebarze (po załadowaniu DOM)
+    initializeBrandSelector();
+    console.log('✓ Selektor marek zainicjalizowany');
+
     console.log('Aplikacja gotowa!');
 });
 
@@ -511,16 +534,25 @@ async function loadDictionary(dictionaryName) {
     }
 }
 
-// Wypełnianie selectów filtrów
+// Wypełnianie selectów filtrów (SIDEBAR filters przed wyszukiwaniem)
 function populateFilterSelect(dictId, values) {
     let selectId;
-    if (dictId === 'marka') selectId = 'brandFilter';
+    // UWAGA: 'marka' NIE ma już dropdowna w sidebarze - używamy checkboxów + autocomplete
+    // Zamiast tego aktualizujemy appState.allBrands dla autocomplete
+    if (dictId === 'marka') {
+        // Normalizuj do uppercase i sortuj
+        appState.allBrands = values.map(v => v.toUpperCase()).sort();
+        console.log(`✓ Załadowano ${values.length} marek dla autocomplete (pierwszych 20):`, appState.allBrands.slice(0, 20));
+        return; // NIE wypełniamy żadnego selecta
+    }
     else if (dictId === 'rodzaj-pojazdu') selectId = 'vehicleTypeFilter';
     else if (dictId === 'rodzaj-paliwa') selectId = 'fuelTypeFilter';
     else if (dictId === 'pochodzenie-pojazdu') selectId = 'originFilter';
     else return;
 
     const select = document.getElementById(selectId);
+    if (!select) return;
+
     values.forEach(value => {
         const option = document.createElement('option');
         option.value = value;
@@ -644,7 +676,14 @@ function setupEventListeners() {
     // Przycisk wyszukiwania
     document.getElementById('searchBtn').addEventListener('click', handleSearch);
 
-    // Przycisk czyszczenia
+    // Przycisk czyszczenia marek w sidebarze
+    document.getElementById('clearBrandsBtn').addEventListener('click', () => {
+        console.log('🧹 Czyszczenie wszystkich wybranych marek...');
+        resetBrandSelectorSidebar();
+        showInfo('✅ Wyczyszczono wybrane marki');
+    });
+
+    // Przycisk czyszczenia danych
     document.getElementById('clearBtn').addEventListener('click', async () => {
         appState.allVehicles = [];
         appState.filteredVehicles = [];
@@ -658,7 +697,7 @@ function setupEventListeners() {
         document.getElementById('clearBtn').style.display = 'none';
     });
 
-    // Filtry wyników
+    // Filtry wyników (brand jest teraz z multi-select w sekcji wyników)
     document.getElementById('filterBrand').addEventListener('change', applyFilters);
     document.getElementById('filterVehicleType').addEventListener('change', applyFilters);
     document.getElementById('filterFuelType').addEventListener('change', applyFilters);
@@ -737,8 +776,13 @@ async function handleSearch() {
     }
     
     // Pobierz filtry z normalizacją stringów
+    // UWAGA: brand jest teraz z nowego UI (checkboxy + chipy), nie z dropdowna!
+    const selectedBrands = getSelectedBrands();
+    console.log(`🏷️ Wybrane marki z UI:`, selectedBrands);
+
     const filters = {
-        brand: (document.getElementById('brandFilter').value || '').trim(),
+        brand: selectedBrands.length === 1 ? selectedBrands[0] : '', // API przyjmuje tylko JEDNĄ markę
+        brands: selectedBrands, // Zapisz wszystkie dla lokalnego filtrowania
         model: (document.getElementById('modelFilter').value || '').trim(),
         yearFrom: parseInt(document.getElementById('yearFrom').value) || null,
         yearTo: parseInt(document.getElementById('yearTo').value) || null,
@@ -746,6 +790,8 @@ async function handleSearch() {
         fuelType: (document.getElementById('fuelTypeFilter').value || '').trim(),
         origin: (document.getElementById('originFilter').value || '').trim()
     };
+
+    console.log(`📝 Filtry do wysłania:`, filters);
     
     // Zapisz parametry wyszukiwania
     appState.searchParams = {
@@ -786,6 +832,13 @@ async function handleSearch() {
                 }
             }
         });
+
+        // Jeśli wybrano wiele marek, filtruj lokalnie (bo API przyjmuje tylko jedną)
+        if (filters.brands && filters.brands.length > 1) {
+            const beforeFilter = newVehicles.length;
+            newVehicles = newVehicles.filter(v => filters.brands.includes(v.attributes?.marka));
+            console.log(`🔍 Lokalne filtrowanie marek: ${beforeFilter} → ${newVehicles.length} (marki: ${filters.brands.join(', ')})`);
+        }
 
         // Append lub replace
         if (appendMode && appState.allVehicles.length > 0) {
@@ -839,6 +892,81 @@ async function handleSearch() {
     }
 }
 
+// Pomocnicza funkcja: Pobierz stronę z retry dla błędu API-ERR-100005
+async function fetchPageWithRetry(url, pageNumber, maxRetries = 5) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`📡 [Page ${pageNumber}, attempt ${attempt}/${maxRetries}] Request URL: ${url}`);
+
+            const response = await fetchWithTimeout(url);
+            const data = await response.json();
+
+            // Sprawdź czy API zwróciło błąd
+            if (data['error-code']) {
+                const errorCode = data['error-code'];
+                const errorReason = data['error-reason'] || data['error-result'] || 'Unknown error';
+
+                console.error(`❌ [Page ${pageNumber}] API CEPiK error:`, data);
+
+                // Specjalna obsługa dla błędu API-ERR-100005 (przeciążenie serwera)
+                if (errorCode === 'API-ERR-100005' && attempt < maxRetries) {
+                    // Exponential backoff z większym opóźnieniem dla tego błędu
+                    const delay = Math.min(2000 * Math.pow(2, attempt - 1), 30000); // Od 2s do max 30s
+                    console.warn(`⚠️ [Page ${pageNumber}] Retry ${attempt}/${maxRetries} for ${errorCode} after ${delay}ms...`);
+                    console.warn(`   Reason: ${errorReason}`);
+                    await sleep(delay);
+                    continue; // Spróbuj ponownie
+                }
+
+                // Dla innych błędów lub gdy osiągnięto max retries
+                throw new Error(`API CEPiK ${errorCode}: ${errorReason}`);
+            }
+
+            // Sprawdź stary format błędów (data.errors)
+            if (data.errors && data.errors.length > 0) {
+                const apiError = data.errors[0];
+                const errorCode = apiError['error-code'];
+                const errorReason = apiError['error-reason'] || apiError['error-result'] || 'Unknown error';
+
+                console.error(`❌ [Page ${pageNumber}] API CEPiK error (old format):`, apiError);
+
+                // Specjalna obsługa dla błędu API-ERR-100005
+                if (errorCode === 'API-ERR-100005' && attempt < maxRetries) {
+                    const delay = Math.min(2000 * Math.pow(2, attempt - 1), 30000);
+                    console.warn(`⚠️ [Page ${pageNumber}] Retry ${attempt}/${maxRetries} for ${errorCode} after ${delay}ms...`);
+                    console.warn(`   Reason: ${errorReason}`);
+                    await sleep(delay);
+                    continue;
+                }
+
+                throw new Error(`API CEPiK ${errorCode}: ${errorReason}`);
+            }
+
+            // Sukces - zwróć dane
+            console.log(`✅ [Page ${pageNumber}] Successfully fetched ${data.data?.length || 0} records`);
+            return data;
+
+        } catch (error) {
+            lastError = error;
+
+            // Dla błędów HTTP (nie API) też próbuj retry
+            if (attempt < maxRetries) {
+                // Krótsze opóźnienie dla błędów HTTP
+                const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Od 1s do max 10s
+                console.warn(`⚠️ [Page ${pageNumber}] Retry ${attempt}/${maxRetries} after ${delay}ms: ${error.message}`);
+                await sleep(delay);
+            } else {
+                console.error(`❌ [Page ${pageNumber}] Max retries reached. Last error:`, error.message);
+            }
+        }
+    }
+
+    // Osiągnięto max retries - rzuć ostatni błąd
+    throw lastError;
+}
+
 // Wyszukiwanie w jednym województwie
 async function searchVoivodeship(code, dateFrom, dateTo, filters, progressCallback = null) {
     const dateFromAPI = formatDateAPI(dateFrom);
@@ -872,49 +1000,59 @@ async function searchVoivodeship(code, dateFrom, dateTo, filters, progressCallba
         'page': '1'
     });
 
-    // Dodaj filtry API
-    if (filters.brand) params.append('filter[marka]', filters.brand.toUpperCase());
-    if (filters.model) params.append('filter[model]', filters.model.toUpperCase());
-    if (filters.vehicleType) params.append('filter[rodzaj-pojazdu]', filters.vehicleType.toUpperCase());
-    if (filters.fuelType) params.append('filter[rodzaj-paliwa]', filters.fuelType.toUpperCase());
-    if (filters.origin) params.append('filter[pochodzenie-pojazdu]', filters.origin.toUpperCase());
+    // Dodaj filtry API (sprawdź czy nie są puste!)
+    if (filters.brand && filters.brand.trim() !== '') {
+        params.append('filter[marka]', filters.brand.toUpperCase());
+    }
+    if (filters.model && filters.model.trim() !== '') {
+        params.append('filter[model]', filters.model.toUpperCase());
+    }
+    if (filters.vehicleType && filters.vehicleType.trim() !== '') {
+        params.append('filter[rodzaj-pojazdu]', filters.vehicleType.toUpperCase());
+    }
+    if (filters.fuelType && filters.fuelType.trim() !== '') {
+        params.append('filter[rodzaj-paliwa]', filters.fuelType.toUpperCase());
+    }
+    if (filters.origin && filters.origin.trim() !== '') {
+        params.append('filter[pochodzenie-pojazdu]', filters.origin.toUpperCase());
+    }
 
     const vehicles = [];
     let page = 1;
     let hasMore = true;
 
+    // Debug: Pokaż co wysyłamy
+    console.log(`🔍 Wyszukiwanie w województwie ${code}:`, {
+        dateFrom: dateFromAPI,
+        dateTo: dateToAPI,
+        brand: filters.brand || '(brak)',
+        model: filters.model || '(brak)',
+        vehicleType: filters.vehicleType || '(brak)',
+        fuelType: filters.fuelType || '(brak)',
+        origin: filters.origin || '(brak)'
+    });
+
     while (hasMore) {
         params.set('page', page);
 
-        try {
-            const response = await fetchWithTimeout(`${CONFIG.API_URL}/pojazdy?${params}`);
-            const data = await response.json();
+        const url = `${CONFIG.API_URL}/pojazdy?${params}`;
 
-            // Sprawdź czy API zwróciło błąd
-            if (data.errors && data.errors.length > 0) {
-                const apiError = data.errors[0];
-                console.error('❌ API CEPiK error:', apiError);
-                throw new Error(`API CEPiK: ${apiError['error-result'] || apiError['error-reason'] || 'Unknown error'} (${apiError['error-code'] || 'no code'})`);
+        // Pobierz stronę z retry (max 5 prób dla błędu API-ERR-100005)
+        const pageData = await fetchPageWithRetry(url, page, 5);
+
+        if (pageData.data && pageData.data.length > 0) {
+            vehicles.push(...pageData.data);
+            updateProgress(vehicles.length, pageData.meta?.count || vehicles.length);
+
+            // Call progress callback if provided
+            if (progressCallback) {
+                progressCallback(page, vehicles.length);
             }
-
-            if (data.data && data.data.length > 0) {
-                vehicles.push(...data.data);
-                updateProgress(vehicles.length, data.meta?.count || vehicles.length);
-
-                // Call progress callback if provided
-                if (progressCallback) {
-                    progressCallback(page, vehicles.length);
-                }
-            }
-
-            // Sprawdź czy są kolejne strony
-            hasMore = data.links && data.links.next;
-            page++;
-
-        } catch (error) {
-            console.error(`Błąd na stronie ${page}:`, error);
-            throw error;
         }
+
+        // Sprawdź czy są kolejne strony
+        hasMore = pageData.links && pageData.links.next;
+        page++;
     }
 
     // Filtruj lokalnie po roku produkcji (API tego nie obsługuje)
@@ -1065,15 +1203,20 @@ function createRequestQueue(maxConcurrent = 5, progressCallback = null) {
             } catch (error) {
                 lastError = error;
 
-                // Nie retry dla 4xx errors (oprócz 429)
-                if (error.message.includes('HTTP 4') && !error.message.includes('429')) {
+                // Sprawdź czy to błąd API-ERR-100005 (powinien być już obsłużony w fetchPageWithRetry)
+                const isAPIError100005 = error.message.includes('API-ERR-100005');
+
+                // Nie retry dla 4xx errors (oprócz 429 i API-ERR-100005)
+                if (error.message.includes('HTTP 4') && !error.message.includes('429') && !isAPIError100005) {
                     console.error(`❌ Client error (no retry): ${error.message}`);
                     throw error;
                 }
 
                 // Exponential backoff
                 if (attempt < maxRetries) {
-                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Max 10s
+                    // Dłuższe opóźnienie dla błędu API-ERR-100005
+                    const baseDelay = isAPIError100005 ? 3000 : 1000;
+                    const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 30000); // Max 30s
                     console.warn(`⚠️ Retry ${attempt}/${maxRetries} for ${taskId} after ${delay}ms: ${error.message}`);
                     await sleep(delay);
                 } else {
@@ -1219,7 +1362,7 @@ async function searchAllVoivodeships(dateFrom, dateTo, filters) {
     codes.forEach(code => {
         queue.add({
             id: `voivodeship-${code}`,
-            maxRetries: 3,
+            maxRetries: 5, // Zwiększono z 3 do 5 dla lepszej obsługi błędów API
             fn: async () => {
                 return await searchVoivodeshipWithTracking(code, dateFrom, dateTo, filters);
             },
@@ -1383,7 +1526,7 @@ function updateBatchSummary() {
     }
 }
 
-// Zastosowanie filtrów
+// Zastosowanie filtrów (na POBRANYCH danych, nie dla API search!)
 function applyFilters() {
     let filtered = [...appState.allVehicles];
 
@@ -1392,7 +1535,7 @@ function applyFilters() {
     const typeSelect = document.getElementById('filterVehicleType');
     const fuelSelect = document.getElementById('filterFuelType');
 
-    // Filtr marki
+    // Filtr marki - używamy STAREGO multi-select (dla filtrowania wyników)
     if (brandSelect) {
         const selectedBrands = Array.from(brandSelect.selectedOptions).map(o => o.value);
         if (selectedBrands.length > 0) {
@@ -1457,9 +1600,236 @@ function applyFilters() {
     renderTable();
 }
 
-// Reset filtrów
+// ===========================
+// BRAND SELECTOR - Autocomplete + Chips
+// ===========================
+
+// Inicjalizacja selektora marek (autocomplete z chipami) w SIDEBARZE
+function initializeBrandSelector() {
+    console.log(`🏁 Inicjalizacja selektora marek (autocomplete)...`);
+    console.log(`  - Wszystkie marki w appState: ${appState.allBrands.length}`);
+
+    // Inicjalizuj autocomplete
+    setupBrandAutocomplete();
+}
+
+// Autocomplete dla wyszukiwania marek w SIDEBARZE
+function setupBrandAutocomplete() {
+    const input = document.getElementById('brandSearchInputSidebar');
+    const dropdown = document.getElementById('brandAutocompleteSidebar');
+
+    if (!input || !dropdown) {
+        console.warn('⚠️ Nie znaleziono elementów autocomplete w sidebarze');
+        return;
+    }
+
+    let currentFocus = -1;
+
+    input.addEventListener('input', (e) => {
+        const value = e.target.value.toUpperCase().trim();
+        dropdown.innerHTML = '';
+        currentFocus = -1;
+
+        if (value.length < 2) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        console.log(`🔍 Autocomplete search for: "${value}"`);
+        console.log(`📋 Available brands (${appState.allBrands.length}):`, appState.allBrands.slice(0, 20));
+
+        // Jeśli brak marek w bazie (słowniki się nie załadowały)
+        if (appState.allBrands.length === 0) {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.style.cursor = 'default';
+            item.style.color = '#888';
+            item.textContent = '⚠️ Brak marek - wykonaj wyszukiwanie';
+            dropdown.appendChild(item);
+            dropdown.style.display = 'block';
+            return;
+        }
+
+        // Filtruj marki (case-insensitive, wszystkie które nie są już wybrane)
+        const filtered = appState.allBrands
+            .filter(brand => {
+                const brandUpper = brand.toUpperCase();
+                const isMatch = brandUpper.includes(value);
+                const notSelected = !appState.selectedBrands.has(brand);
+                return isMatch && notSelected;
+            })
+            .sort()
+            .slice(0, 10); // Max 10 wyników
+
+        console.log(`✅ Filtered results (${filtered.length}):`, filtered);
+
+        if (filtered.length === 0) {
+            // Pokaż komunikat "Nie znaleziono"
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.style.cursor = 'default';
+            item.style.color = '#888';
+            item.textContent = `❌ Nie znaleziono "${value}"`;
+            dropdown.appendChild(item);
+            dropdown.style.display = 'block';
+            return;
+        }
+
+        // Pokaż wyniki
+        filtered.forEach((brand, idx) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.textContent = brand;
+            item.dataset.index = idx;
+
+            item.addEventListener('click', () => {
+                addBrandChip(brand);
+                input.value = '';
+                dropdown.style.display = 'none';
+            });
+
+            dropdown.appendChild(item);
+        });
+
+        dropdown.style.display = 'block';
+    });
+
+    // Keyboard navigation
+    input.addEventListener('keydown', (e) => {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            currentFocus++;
+            addActive(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            currentFocus--;
+            addActive(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentFocus > -1 && items[currentFocus]) {
+                items[currentFocus].click();
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+            input.value = '';
+        }
+    });
+
+    function addActive(items) {
+        if (!items || items.length === 0) return;
+        removeActive(items);
+        if (currentFocus >= items.length) currentFocus = 0;
+        if (currentFocus < 0) currentFocus = items.length - 1;
+        items[currentFocus].classList.add('active');
+    }
+
+    function removeActive(items) {
+        items.forEach(item => item.classList.remove('active'));
+    }
+
+    // Zamknij dropdown przy kliknięciu poza nim
+    document.addEventListener('click', (e) => {
+        if (e.target !== input) {
+            dropdown.style.display = 'none';
+        }
+    });
+}
+
+// Dodaj chip dla wybranej marki w SIDEBARZE
+function addBrandChip(brand) {
+    if (appState.selectedBrands.has(brand)) return;
+
+    appState.selectedBrands.add(brand);
+
+    const container = document.getElementById('selectedBrandsChipsSidebar');
+    if (!container) {
+        console.warn('⚠️ Nie znaleziono kontenera selectedBrandsChipsSidebar');
+        return;
+    }
+
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.dataset.brand = brand;
+    chip.innerHTML = `
+        ${brand}
+        <span class="chip-remove" data-brand="${brand}" title="Usuń">×</span>
+    `;
+
+    chip.querySelector('.chip-remove').addEventListener('click', () => {
+        removeBrandChip(brand);
+    });
+
+    container.appendChild(chip);
+    // NIE wywołujemy applyFilters() - to tylko dla API search
+}
+
+// Usuń chip z SIDEBARA
+function removeBrandChip(brand) {
+    appState.selectedBrands.delete(brand);
+
+    const container = document.getElementById('selectedBrandsChipsSidebar');
+    if (!container) return;
+
+    const chip = container.querySelector(`.chip[data-brand="${brand}"]`);
+    if (chip) {
+        chip.remove();
+    }
+
+    // NIE wywołujemy applyFilters() - to tylko dla API search
+}
+
+// Pobierz wszystkie wybrane marki (z checkboxów + chipów)
+function getSelectedBrands() {
+    const brands = Array.from(appState.selectedBrands);
+    console.log(`📦 getSelectedBrands() wywołane:`, {
+        count: brands.length,
+        brands: brands,
+        source: 'appState.selectedBrands'
+    });
+    return brands;
+}
+
+// Reset selektora marek w SIDEBARZE (czyszczenie chipów)
+function resetBrandSelectorSidebar() {
+    console.log(`🧹 resetBrandSelectorSidebar() - przed czyszczeniem:`, {
+        selectedBrandsCount: appState.selectedBrands.size,
+        selectedBrands: Array.from(appState.selectedBrands)
+    });
+
+    // Wyczyść state
+    appState.selectedBrands.clear();
+
+    // Wyczyść chipy
+    const chipsContainer = document.getElementById('selectedBrandsChipsSidebar');
+    if (chipsContainer) {
+        const chipCount = chipsContainer.children.length;
+        console.log(`  - Usuwanie ${chipCount} chipów...`);
+        chipsContainer.innerHTML = '';
+    }
+
+    // Wyczyść search input
+    const brandSearchInput = document.getElementById('brandSearchInputSidebar');
+    if (brandSearchInput) {
+        brandSearchInput.value = '';
+    }
+
+    console.log(`✅ resetBrandSelectorSidebar() - po czyszczeniu:`, {
+        selectedBrandsCount: appState.selectedBrands.size,
+        selectedBrands: Array.from(appState.selectedBrands)
+    });
+}
+
+// Reset filtrów (w sekcji WYNIKÓW, nie sidebar!)
 function resetFilters() {
-    document.getElementById('filterBrand').selectedIndex = -1;
+    // Reset multi-select dla marek (w wynikach)
+    const brandSelect = document.getElementById('filterBrand');
+    if (brandSelect) {
+        brandSelect.selectedIndex = -1;
+    }
+
+    // Reset pozostałych filtrów
     document.getElementById('filterVehicleType').selectedIndex = -1;
     document.getElementById('filterFuelType').selectedIndex = -1;
 
@@ -1680,10 +2050,21 @@ function updateFilterOptions() {
         Object.keys(attrs).forEach(key => allColumns.add(key));
     });
 
-    // Aktualizuj selecty (jeśli są puste lub pochodzą z danych)
+    // Aktualizuj listę wszystkich marek (dla autocomplete w sidebarze)
+    // Połącz marki z API słowników + marki z pobranych danych (UPPERCASE!)
+    const allBrandsSet = new Set([
+        ...appState.allBrands,
+        ...Array.from(brands).map(b => b.toUpperCase())
+    ]);
+    appState.allBrands = Array.from(allBrandsSet).sort();
+    console.log(`🔄 Zaktualizowano listę marek: ${appState.allBrands.length} unikalnych (pierwszych 20):`, appState.allBrands.slice(0, 20));
+
+    // Aktualizuj selecty (dla filtrowania WYNIKÓW, nie sidebar!)
     populateMultiSelect('filterBrand', Array.from(brands).sort());
     populateMultiSelect('filterVehicleType', Array.from(types).sort());
     populateMultiSelect('filterFuelType', Array.from(fuels).sort());
+
+    // NIE wywołujemy initializeBrandSelector() - już zainicjalizowany przy starcie
 
     // Aktualizuj pola roku
     const yearMinInput = document.getElementById('filterYearMinInput');
